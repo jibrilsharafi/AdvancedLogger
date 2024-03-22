@@ -1,0 +1,29 @@
+{
+    "name": "AdvancedLogger",
+    "keywords": "onewire, 1-wire, bus, sensor, temperature",
+    "description": "Library for simple logging to memory with comprehensive format.",
+    "repository":
+    {
+      "type": "git",
+      "url": "https://github.com/jibrilsharafi/AdvancedLogger.git"
+    },
+    "authors": 
+    [
+      {
+        "name": "Jibril Sharafi",
+        "email": "jibril.sharafi@gmail.com",
+        "url": "https://github.com/jibrilsharafi",
+        "maintainer": true
+      }
+    ],
+    "dependencies":
+    {
+      "name": "ArduinoJson",
+      "authors": "bblanchon",
+      "frameworks": "arduino"
+    },
+    "version": "1.0.0",
+    "frameworks": "arduino",
+    "platforms": "*"
+  }
+  
