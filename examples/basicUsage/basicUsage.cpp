@@ -1,5 +1,5 @@
 /*
-  * This is a simple example to show how to use the advancedLogger library.
+  * This is a simple example to show how to use the AdvancedLogger library.
   * 
   * The library is designed to be easy to use and to be able to log messages
   * to the console and to a file on the SPIFFS.
@@ -8,8 +8,9 @@
   * messages accordingly.
 */
 #include <Arduino.h>
-#include "advancedLogger.h"
 #include <SPIFFS.h>
+
+#include "advancedLogger.h"
 
 AdvancedLogger logger;
 

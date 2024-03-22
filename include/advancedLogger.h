@@ -14,7 +14,7 @@
  * It allows you to log messages to the console and to a file on the SPIFFS.
  * You can set the print level and save level, and the library will only log
  * messages accordingly.
- */
+*/
 
 #ifndef ADVANCEDLOGGER_H
 #define ADVANCEDLOGGER_H
@@ -32,8 +32,8 @@
 #define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
 #define ADVANCEDLOGGER_FORMAT "[%s] [%lu ms] [%s] [Core %d] [%s] %s" // [TIME] [MICROS us] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
-#define ADVANCEDLOGGER_LOG_PATH "/advancedLogger/log.txt"
-#define ADVANCEDLOGGER_CONFIG_PATH "/advancedLogger/config.json"
+#define ADVANCEDLOGGER_LOG_PATH "/AdvancedLogger/log.txt"
+#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.json"
 
 #include <Arduino.h>
 
