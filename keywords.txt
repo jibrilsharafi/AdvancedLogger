@@ -1,0 +1,31 @@
+####################################################################################################
+# Syntax coloring for the AdvancedLogger library
+####################################################################################################
+
+####################################################################################################
+# AdvancedLogger keywords
+####################################################################################################
+AdvancedLogger  KEYWORD1
+
+####################################################################################################
+# AdvancedLogger functions and methods
+####################################################################################################
+log             KEYWORD2
+logOnly         KEYWORD2
+setPrintLevel   KEYWORD2
+setSaveLevel    KEYWORD2
+getPrintLevel   KEYWORD2
+getSaveLevel    KEYWORD2
+setDefaultLogLevels KEYWORD2
+setLogLevelsFromSpiffs KEYWORD2
+clearLog        KEYWORD2
+
+####################################################################################################
+# AdvancedLogger constants
+####################################################################################################
+ADVANCEDLOGGER_VERBOSE LITERAL1
+ADVANCEDLOGGER_DEBUG   LITERAL1
+ADVANCEDLOGGER_INFO    LITERAL1
+ADVANCEDLOGGER_WARNING LITERAL1
+ADVANCEDLOGGER_ERROR   LITERAL1
+ADVANCEDLOGGER_FATAL   LITERAL1
