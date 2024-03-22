@@ -61,8 +61,8 @@ public:
     void clearLog();
 
 private:
-    int _print_level;
-    int _save_level;
+    int _printLevel;
+    int _saveLevel;
     
     void _save(const char *messageFormatted);
     void _saveLogLevelsToSpiffs();

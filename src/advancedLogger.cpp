@@ -2,8 +2,8 @@
 
 AdvancedLogger::AdvancedLogger()
 {
-    _print_level = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
-    _save_level = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
+    _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
+    _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
 }
 
 void AdvancedLogger::begin()
@@ -18,7 +18,7 @@ void AdvancedLogger::begin()
 void AdvancedLogger::log(const char *message, const char *function, int logLevel)
 {
     logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _print_level && logLevel < _save_level)
+    if (logLevel < _printLevel && logLevel < _saveLevel)
     {
         return;
     }
@@ -36,12 +36,12 @@ void AdvancedLogger::log(const char *message, const char *function, int logLevel
         function,
         message);
 
-    if (logLevel >= _print_level)
+    if (logLevel >= _printLevel)
     {
         Serial.println(_message_formatted);
     }
 
-    if (logLevel >= _save_level)
+    if (logLevel >= _saveLevel)
     {
         _save(_message_formatted);
     }
@@ -50,7 +50,7 @@ void AdvancedLogger::log(const char *message, const char *function, int logLevel
 void AdvancedLogger::logOnly(const char *message, const char *function, int logLevel)
 {
     logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _print_level)
+    if (logLevel < _printLevel)
     {
         return;
     }
@@ -68,7 +68,7 @@ void AdvancedLogger::logOnly(const char *message, const char *function, int logL
         function,
         message);
 
-    if (logLevel >= _print_level)
+    if (logLevel >= _printLevel)
     {
         Serial.println(_message_formatted);
     }
@@ -79,7 +79,7 @@ void AdvancedLogger::setPrintLevel(int level)
     char _buffer[50];
     snprintf(_buffer, sizeof(_buffer), "Setting print level to %d", level);
     log(_buffer, "AdvancedLogger::setPrintLevel", ADVANCEDLOGGER_WARNING);
-    _print_level = _saturateLogLevel(level);
+    _printLevel = _saturateLogLevel(level);
     _saveLogLevelsToSpiffs();
 }
 
@@ -88,18 +88,18 @@ void AdvancedLogger::setSaveLevel(int level)
     char _buffer[50];
     snprintf(_buffer, sizeof(_buffer), "Setting save level to %d", level);
     log(_buffer, "AdvancedLogger::setSaveLevel", ADVANCEDLOGGER_WARNING);
-    _save_level = _saturateLogLevel(level);
+    _saveLevel = _saturateLogLevel(level);
     _saveLogLevelsToSpiffs();
 }
 
 String AdvancedLogger::getPrintLevel()
 {
-    return _logLevelToString(_print_level);
+    return _logLevelToString(_printLevel);
 }
 
 String AdvancedLogger::getSaveLevel()
 {
-    return _logLevelToString(_save_level);
+    return _logLevelToString(_saveLevel);
 }
 
 void AdvancedLogger::setDefaultLogLevels()
@@ -180,8 +180,8 @@ void AdvancedLogger::_save(const char *messageFormatted)
 void AdvancedLogger::_saveLogLevelsToSpiffs()
 {
     JsonDocument _jsonDocument;
-    _jsonDocument["level"]["print"] = _print_level;
-    _jsonDocument["level"]["save"] = _save_level;
+    _jsonDocument["level"]["print"] = _printLevel;
+    _jsonDocument["level"]["save"] = _saveLevel;
     File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
     if (!_file)
     {
