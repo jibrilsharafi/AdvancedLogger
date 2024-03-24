@@ -2,7 +2,7 @@
  * File: basicUsage.cpp
  * --------------------
  * This file provides a simple example to show how to use the AdvancedLogger library.
- * 
+ *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Date: 21/03/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
@@ -31,10 +31,12 @@ AdvancedLogger logger;
 String printLevel;
 String saveLevel;
 
-void setup() {
+void setup()
+{
     Serial.begin(9600);
 
-    if (!SPIFFS.begin()) {
+    if (!SPIFFS.begin())
+    {
         Serial.println("An Error has occurred while mounting SPIFFS");
     }
 
@@ -46,7 +48,8 @@ void setup() {
     logger.log("Setup done!", "simpleExample::setup", ADVANCEDLOGGER_INFO);
 }
 
-void loop() {
+void loop()
+{
     logger.log("This is an debug message!", "simpleExample::loop", ADVANCEDLOGGER_VERBOSE);
     logger.log("This is an info message!!", "simpleExample::loop", ADVANCEDLOGGER_INFO);
     logger.log("This is an warning message!!!", "simpleExample::loop", ADVANCEDLOGGER_WARNING);
@@ -58,8 +61,10 @@ void loop() {
     printLevel = logger.getPrintLevel();
     saveLevel = logger.getSaveLevel();
 
-    if (millis() > 60000) {
-      logger.clearLog();
-      logger.setDefaultLogLevels();
+    if (millis() > 60000)
+    {
+        logger.clearLog();
+        logger.setDefaultLogLevels();
+        logger.log("Log cleared!", "simpleExample::loop", ADVANCEDLOGGER_WARNING);
     }
 }
