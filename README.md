@@ -5,9 +5,9 @@ A **simple** logging library capable of **saving logs to memory** and with a **c
 Usage:
 ```cpp
 AdvancedLogger logger;
-
 ...
-
+logger.begin();
+...
 logger.log("This is an info message!", "main::loop", ADVANCEDLOGGER_INFO);
 delay(1000);
 logger.log("This is an error message!!", "main::loop", ADVANCEDLOGGER_ERROR);
@@ -17,7 +17,7 @@ Output (both in the Serial and in the log file in memory):
 [2024-03-23 09:44:10] [1450 ms] [INFO] [Core 1] [main::loop] This is an info message!
 [2024-03-23 09:44:11] [1550 ms] [ERROR] [Core 1] [main::loop] This is an error message!!
 ```
-For a detailed example, see the [basicExample](examples/basicUsage/basicUsage.cpp) in the examples folder.
+For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.cpp) and [basicServer](examples/basicServer/basicServer.cpp) in the examples folder.
 
 ## Why?
 There is no way of sugar-coat it: *every well-developed project will eventually need a proper logging* in place to make sure that not only everything is fully monitored, but also that everything monitored is later accessible for debugging. 
