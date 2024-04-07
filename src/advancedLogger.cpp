@@ -134,8 +134,6 @@ bool AdvancedLogger::setLogLevelsFromSpiffs()
     }
 
     log("JSON deserialized from SPIFFS correctly", "utils::deserializeJsonFromSpiffs", ADVANCEDLOGGER_DEBUG);
-    serializeJson(_jsonDocument, Serial);
-    Serial.println();
 
     if (_jsonDocument.isNull())
     {
