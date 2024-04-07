@@ -5,9 +5,9 @@ A **simple** logging library capable of **saving logs to memory** and with a **c
 Usage:
 ```cpp
 AdvancedLogger logger;
-
 ...
-
+logger.begin();
+...
 logger.log("This is an info message!", "main::loop", ADVANCEDLOGGER_INFO);
 delay(1000);
 logger.log("This is an error message!!", "main::loop", ADVANCEDLOGGER_ERROR);
@@ -17,7 +17,7 @@ Output (both in the Serial and in the log file in memory):
 [2024-03-23 09:44:10] [1450 ms] [INFO] [Core 1] [main::loop] This is an info message!
 [2024-03-23 09:44:11] [1550 ms] [ERROR] [Core 1] [main::loop] This is an error message!!
 ```
-For a detailed example, see the [basicExample](examples/basicUsage/basicUsage.cpp) in the examples folder.
+For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.cpp) and [basicServer](examples/basicServer/basicServer.cpp) in the examples folder.
 
 ## Why?
 There is no way of sugar-coat it: *every well-developed project will eventually need a proper logging* in place to make sure that not only everything is fully monitored, but also that everything monitored is later accessible for debugging. 
@@ -64,9 +64,11 @@ This project depends on the following libraries:
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson), version 7.0.0 or later.
 
 ## What's next?
+- [ ] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
 - [ ] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [ ] **Dump to serial**: implement a functino that dumps the entire log to the serial, so that it can be accessed in real time.
 - [ ] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32S3, but it should be tested on other microcontrollers to ensure compatibility.
+- [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
