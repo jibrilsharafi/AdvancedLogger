@@ -33,12 +33,11 @@
 #define ADVANCEDLOGGER_FORMAT "[%s] [%lu ms] [%s] [Core %d] [%s] %s" // [TIME] [MICROS us] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
 #define ADVANCEDLOGGER_LOG_PATH "/AdvancedLogger/log.txt"
-#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.json"
+#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
 
 #include <Arduino.h>
 
 #include <SPIFFS.h>
-#include <ArduinoJson.h>
 
 class AdvancedLogger
 {

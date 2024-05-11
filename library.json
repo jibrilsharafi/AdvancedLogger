@@ -1,29 +1,21 @@
 {
-    "name": "AdvancedLogger",
-    "keywords": "logger, log, logging, memory, format",
-    "description": "Library for simple logging to memory with comprehensive format.",
-    "repository":
+  "name": "AdvancedLogger",
+  "keywords": "logger, log, logging, memory, format",
+  "description": "Library for simple logging to memory with comprehensive format.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jibrilsharafi/AdvancedLogger.git"
+  },
+  "authors": [
     {
-      "type": "git",
-      "url": "https://github.com/jibrilsharafi/AdvancedLogger.git"
-    },
-    "authors": 
-    [
-      {
-        "name": "Jibril Sharafi",
-        "email": "jibril.sharafi@gmail.com",
-        "url": "https://github.com/jibrilsharafi",
-        "maintainer": true
-      }
-    ],
-    "dependencies":
-    {
-      "name": "ArduinoJson",
-      "authors": "bblanchon",
-      "frameworks": "arduino"
-    },
-    "version": "1.1.0",
-    "frameworks": "arduino",
-    "platforms": "*"
-  }
-  
+      "name": "Jibril Sharafi",
+      "email": "jibril.sharafi@gmail.com",
+      "url": "https://github.com/jibrilsharafi",
+      "maintainer": true
+    }
+  ],
+  "dependencies": {},
+  "version": "1.1.0",
+  "frameworks": "arduino",
+  "platforms": "*"
+}

@@ -111,58 +111,41 @@ void AdvancedLogger::setDefaultLogLevels()
     log("Log levels set to default", "advancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_DEBUG);
 }
 
-bool AdvancedLogger::setLogLevelsFromSpiffs()
-{
-    log("Deserializing JSON from SPIFFS", "utils::deserializeJsonFromSpiffs", ADVANCEDLOGGER_DEBUG);
-
-    File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "r");
-    if (!_file)
-    {
-        log(
-            ("Failed to open file " + String(ADVANCEDLOGGER_CONFIG_PATH)).c_str(),
-            "utils::deserializeJsonFromSpiffs",
-            ADVANCEDLOGGER_ERROR);
-        return false;
-    }
-    JsonDocument _jsonDocument;
-
-    DeserializationError _error = deserializeJson(_jsonDocument, _file);
-    _file.close();
-    if (_error)
-    {
-        log(
-            ("Failed to deserialize file " + String(ADVANCEDLOGGER_CONFIG_PATH) + ". Error: " + String(_error.c_str())).c_str(),
-            "utils::deserializeJsonFromSpiffs",
-            ADVANCEDLOGGER_ERROR);
+bool AdvancedLogger::setLogLevelsFromSpiffs() {
+    File file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "r");
+    if (!file) {
+        log("Failed to open config file for reading", "advancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_ERROR);
         return false;
     }
 
-    log("JSON deserialized from SPIFFS correctly", "utils::deserializeJsonFromSpiffs", ADVANCEDLOGGER_DEBUG);
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        int separatorPosition = line.indexOf('=');
+        String key = line.substring(0, separatorPosition);
+        String value = line.substring(separatorPosition + 1);
 
-    if (_jsonDocument.isNull())
-    {
-        return false;
+        if (key == "printLevel") {
+            setPrintLevel(value.toInt());
+        } else if (key == "saveLevel") {
+            setSaveLevel(value.toInt());
+        }
     }
-    setPrintLevel(_jsonDocument["level"]["print"].as<int>());
-    setSaveLevel(_jsonDocument["level"]["save"].as<int>());
+
+    file.close();
     log("Log levels set from SPIFFS", "advancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_DEBUG);
-
     return true;
 }
 
-void AdvancedLogger::_saveLogLevelsToSpiffs()
-{
-    JsonDocument _jsonDocument;
-    _jsonDocument["level"]["print"] = _printLevel;
-    _jsonDocument["level"]["save"] = _saveLevel;
-    File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
-    if (!_file)
-    {
-        log("Failed to open logger.json", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
+void AdvancedLogger::_saveLogLevelsToSpiffs() {
+    File file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
+    if (!file) {
+        log("Failed to open config file for writing", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
         return;
     }
-    serializeJson(_jsonDocument, _file);
-    _file.close();
+
+    file.println(String("printLevel=") + String(_printLevel));
+    file.println(String("saveLevel=") + String(_saveLevel));
+    file.close();
     log("Log levels saved to SPIFFS", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
 }
 
