@@ -150,6 +150,22 @@ bool AdvancedLogger::setLogLevelsFromSpiffs()
     return true;
 }
 
+void AdvancedLogger::_saveLogLevelsToSpiffs()
+{
+    JsonDocument _jsonDocument;
+    _jsonDocument["level"]["print"] = _printLevel;
+    _jsonDocument["level"]["save"] = _saveLevel;
+    File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
+    if (!_file)
+    {
+        log("Failed to open logger.json", "advancedLogger.cpp::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
+        return;
+    }
+    serializeJson(_jsonDocument, _file);
+    _file.close();
+    log("Log levels saved to SPIFFS", "advancedLogger.cpp::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
+}
+
 void AdvancedLogger::clearLog()
 {
     logOnly("Clearing log", "advancedLogger.cpp::clearLog", ADVANCEDLOGGER_WARNING);
@@ -169,7 +185,6 @@ void AdvancedLogger::_save(const char *messageFormatted)
     File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "a");
     if (file)
     {
-
         file.println(messageFormatted);
         file.close();
     }
@@ -177,22 +192,6 @@ void AdvancedLogger::_save(const char *messageFormatted)
     {
         logOnly("Failed to open log file", "advancedLogger.cpp::_save", ADVANCEDLOGGER_ERROR);
     }
-}
-
-void AdvancedLogger::_saveLogLevelsToSpiffs()
-{
-    JsonDocument _jsonDocument;
-    _jsonDocument["level"]["print"] = _printLevel;
-    _jsonDocument["level"]["save"] = _saveLevel;
-    File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
-    if (!_file)
-    {
-        log("Failed to open logger.json", "advancedLogger.cpp::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
-        return;
-    }
-    serializeJson(_jsonDocument, _file);
-    _file.close();
-    log("Log levels saved to SPIFFS", "advancedLogger.cpp::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
 }
 
 String AdvancedLogger::_logLevelToString(int logLevel)
