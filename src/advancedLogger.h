@@ -28,6 +28,7 @@
 
 #define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 2 // 2 = INFO
 #define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 3  // 3 = WARNING
+#define ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES 1000 // 1000 lines before the log is cleared
 
 #define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
 #define ADVANCEDLOGGER_FORMAT "[%s] [%lu ms] [%s] [Core %d] [%s] %s" // [TIME] [MICROS us] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
@@ -55,8 +56,9 @@ public:
     String getSaveLevel();
 
     void setDefaultLogLevels();
-    bool setLogLevelsFromSpiffs();
 
+    void setMaxLogLines(int maxLines);
+    int getLogLines();
     void clearLog();
 
     void dumpToSerial();
@@ -64,9 +66,12 @@ public:
 private:
     int _printLevel;
     int _saveLevel;
+
+    int _maxLogLines;
     
     void _save(const char *messageFormatted);
-    void _saveLogLevelsToSpiffs();
+    bool _setConfigFromSpiffs();
+    void _saveConfigToSpiffs();
 
     String _logLevelToString(int logLevel);
     int _saturateLogLevel(int logLevel);

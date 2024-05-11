@@ -4,14 +4,18 @@ AdvancedLogger::AdvancedLogger()
 {
     _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
     _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
+    _maxLogLines = ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES;
 }
 
 void AdvancedLogger::begin()
 {
-    if (!setLogLevelsFromSpiffs())
+    log("Initializing AdvancedLogger...", "advancedLogger::begin", ADVANCEDLOGGER_DEBUG);
+
+    if (!_setConfigFromSpiffs())
     {
         setDefaultLogLevels();
     }
+
     log("AdvancedLogger initialized", "advancedLogger::begin", ADVANCEDLOGGER_DEBUG);
 }
 
@@ -44,6 +48,14 @@ void AdvancedLogger::log(const char *message, const char *function, int logLevel
     if (logLevel >= _saveLevel)
     {
         _save(_message_formatted);
+        if (getLogLines() > _maxLogLines)
+        {
+            clearLog();
+            log(
+                ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
+                "advancedLogger::log",
+                ADVANCEDLOGGER_WARNING);
+        }
     }
 }
 
@@ -81,7 +93,7 @@ void AdvancedLogger::setPrintLevel(int level)
         "advancedLogger::setPrintLevel",
         ADVANCEDLOGGER_INFO);
     _printLevel = _saturateLogLevel(level);
-    _saveLogLevelsToSpiffs();
+    _saveConfigToSpiffs();
 }
 
 void AdvancedLogger::setSaveLevel(int level)
@@ -91,7 +103,7 @@ void AdvancedLogger::setSaveLevel(int level)
         "advancedLogger::setSaveLevel",
         ADVANCEDLOGGER_INFO);
     _saveLevel = _saturateLogLevel(level);
-    _saveLogLevelsToSpiffs();
+    _saveConfigToSpiffs();
 }
 
 String AdvancedLogger::getPrintLevel()
@@ -108,45 +120,91 @@ void AdvancedLogger::setDefaultLogLevels()
 {
     setPrintLevel(ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL);
     setSaveLevel(ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL);
-    log("Log levels set to default", "advancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_DEBUG);
+    setMaxLogLines(ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES);
+
+    log("Log levels set to default", "advancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_INFO);
 }
 
-bool AdvancedLogger::setLogLevelsFromSpiffs() {
+bool AdvancedLogger::_setConfigFromSpiffs()
+{
     File file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "r");
-    if (!file) {
-        log("Failed to open config file for reading", "advancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_ERROR);
+    if (!file)
+    {
+        log("Failed to open config file for reading", "advancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_ERROR);
         return false;
     }
 
-    while (file.available()) {
+    while (file.available())
+    {
         String line = file.readStringUntil('\n');
         int separatorPosition = line.indexOf('=');
         String key = line.substring(0, separatorPosition);
         String value = line.substring(separatorPosition + 1);
 
-        if (key == "printLevel") {
+        if (key == "printLevel")
+        {
             setPrintLevel(value.toInt());
-        } else if (key == "saveLevel") {
+        }
+        else if (key == "saveLevel")
+        {
             setSaveLevel(value.toInt());
+        }
+        else if (key == "maxLogLines")
+        {
+            setMaxLogLines(value.toInt());
         }
     }
 
     file.close();
-    log("Log levels set from SPIFFS", "advancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_DEBUG);
+    log("Log levels set from SPIFFS", "advancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_DEBUG);
     return true;
 }
 
-void AdvancedLogger::_saveLogLevelsToSpiffs() {
+void AdvancedLogger::_saveConfigToSpiffs()
+{
     File file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
-    if (!file) {
-        log("Failed to open config file for writing", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
+    if (!file)
+    {
+        log("Failed to open config file for writing", "advancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_ERROR);
         return;
     }
 
     file.println(String("printLevel=") + String(_printLevel));
     file.println(String("saveLevel=") + String(_saveLevel));
+    file.println(String("maxLogLines=") + String(_maxLogLines));
     file.close();
-    log("Log levels saved to SPIFFS", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
+    log("Log levels saved to SPIFFS", "advancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_DEBUG);
+}
+
+void AdvancedLogger::setMaxLogLines(int maxLines)
+{
+    log(
+        ("Setting max log lines to " + String(maxLines)).c_str(),
+        "advancedLogger::setMaxLogLines",
+        ADVANCEDLOGGER_INFO);
+    _maxLogLines = maxLines;
+    _saveConfigToSpiffs();
+}
+
+int AdvancedLogger::getLogLines()
+{
+    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
+    if (!file)
+    {
+        logOnly("Failed to open log file", "advancedLogger::getLogLines", ADVANCEDLOGGER_ERROR);
+        return -1;
+    }
+
+    int lines = 0;
+    while (file.available())
+    {
+        if (file.read() == '\n')
+        {
+            lines++;
+        }
+    }
+    file.close();
+    return lines;
 }
 
 void AdvancedLogger::clearLog()
@@ -180,12 +238,12 @@ void AdvancedLogger::_save(const char *messageFormatted)
 void AdvancedLogger::dumpToSerial()
 {
     logOnly(
-        "Dumping log to Serial", 
-        "advancedLogger::dumpToSerial", 
-        ADVANCEDLOGGER_INFO
-    );
+        "Dumping log to Serial",
+        "advancedLogger::dumpToSerial",
+        ADVANCEDLOGGER_INFO);
 
-    for(int i = 0; i < 2*50; i++) Serial.print("_");
+    for (int i = 0; i < 2 * 50; i++)
+        Serial.print("_");
     Serial.println();
 
     File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
@@ -201,14 +259,14 @@ void AdvancedLogger::dumpToSerial()
     }
     file.close();
 
-    for(int i = 0; i < 2*50; i++) Serial.print("_");
+    for (int i = 0; i < 2 * 50; i++)
+        Serial.print("_");
     Serial.println();
 
     logOnly(
-        "Log dumped to Serial", 
-        "advancedLogger::dumpToSerial", 
-        ADVANCEDLOGGER_INFO
-    );
+        "Log dumped to Serial",
+        "advancedLogger::dumpToSerial",
+        ADVANCEDLOGGER_INFO);
 }
 
 String AdvancedLogger::_logLevelToString(int logLevel)

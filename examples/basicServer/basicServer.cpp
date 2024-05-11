@@ -4,7 +4,7 @@
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 11/05/2024
+ * Date: 07/04/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -47,6 +47,8 @@ const long intervalLogDump = 10000;
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
 
+int maxLogLines = 10; // Low value for testing purposes
+
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
 const char *ssid = "YOUR_SSID";
 const char *password = "YOUR_PASSWORD";
@@ -70,6 +72,9 @@ void setup()
     // levels are used (DEBUG for print and INFO for save).
     logger.setPrintLevel(ADVANCEDLOGGER_DEBUG);
     logger.setSaveLevel(ADVANCEDLOGGER_INFO);
+    // Set the maximum number of log lines before the log is cleared
+    // If you don't set this, the default is used
+    logger.setMaxLogLines(maxLogLines);
     logger.log("AdvancedLogger setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
 
     // Connect to WiFi
@@ -86,8 +91,8 @@ void setup()
     // --------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button><br><br><button onclick=\"window.location.href='/config'\">Explore the configuration</button>"); });
-    server.serveStatic("/log", SPIFFS, "/AdvancedLogger/log.txt");
-    server.serveStatic("/config", SPIFFS, "/AdvancedLogger/config.json");
+    server.serveStatic("/log", SPIFFS, ADVANCEDLOGGER_LOG_PATH);
+    server.serveStatic("/config", SPIFFS, ADVANCEDLOGGER_CONFIG_PATH);
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });
     server.begin();
@@ -101,12 +106,17 @@ void setup()
 void loop()
 {
     logger.log("This is an debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
+    delay(500);
     logger.log("This is an info message!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
+    delay(500);
     logger.log("This is an warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+    delay(500);
     logger.log("This is an error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
+    delay(500);
     logger.log("This is an fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
-    delay(1000);
+    delay(500);
     logger.logOnly("This is an info message (logOnly)!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
+    delay(1000);
 
     printLevel = logger.getPrintLevel();
     saveLevel = logger.getSaveLevel();
@@ -120,7 +130,11 @@ void loop()
     
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
-        logger.dumpToSerial();
+        logger.log(
+            ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
+            "basicServer::loop",
+            ADVANCEDLOGGER_INFO
+        );
         logger.clearLog();
         logger.setDefaultLogLevels();
         logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
