@@ -194,6 +194,40 @@ void AdvancedLogger::_save(const char *messageFormatted)
     }
 }
 
+void AdvancedLogger::dumpToSerial()
+{
+    logOnly(
+        "Dumping log to Serial", 
+        "advancedLogger.cpp::dumpToSerial", 
+        ADVANCEDLOGGER_INFO
+    );
+
+    for(int i = 0; i < 2*50; i++) Serial.print("_");
+    Serial.println();
+
+    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
+    if (!file)
+    {
+        logOnly("Failed to open log file", "advancedLogger.cpp::dumpToSerial", ADVANCEDLOGGER_ERROR);
+        return;
+    }
+    while (file.available())
+    {
+        Serial.write(file.read());
+        Serial.flush();
+    }
+    file.close();
+
+    for(int i = 0; i < 2*50; i++) Serial.print("_");
+    Serial.println();
+
+    logOnly(
+        "Log dumped to Serial", 
+        "advancedLogger.cpp::dumpToSerial", 
+        ADVANCEDLOGGER_INFO
+    );
+}
+
 String AdvancedLogger::_logLevelToString(int logLevel)
 {
     switch (logLevel)

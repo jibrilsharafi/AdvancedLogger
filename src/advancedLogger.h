@@ -60,6 +60,8 @@ public:
 
     void clearLog();
 
+    void dumpToSerial();
+
 private:
     int _printLevel;
     int _saveLevel;
