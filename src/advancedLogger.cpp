@@ -12,7 +12,7 @@ void AdvancedLogger::begin()
     {
         setDefaultLogLevels();
     }
-    log("AdvancedLogger initialized", "AdvancedLogger::begin", ADVANCEDLOGGER_DEBUG);
+    log("AdvancedLogger initialized", "advancedLogger::begin", ADVANCEDLOGGER_DEBUG);
 }
 
 void AdvancedLogger::log(const char *message, const char *function, int logLevel)
@@ -76,18 +76,20 @@ void AdvancedLogger::logOnly(const char *message, const char *function, int logL
 
 void AdvancedLogger::setPrintLevel(int level)
 {
-    char _buffer[50];
-    snprintf(_buffer, sizeof(_buffer), "Setting print level to %d", level);
-    log(_buffer, "AdvancedLogger::setPrintLevel", ADVANCEDLOGGER_WARNING);
+    log(
+        ("Setting print level to " + String(level)).c_str(),
+        "advancedLogger::setPrintLevel",
+        ADVANCEDLOGGER_INFO);
     _printLevel = _saturateLogLevel(level);
     _saveLogLevelsToSpiffs();
 }
 
 void AdvancedLogger::setSaveLevel(int level)
 {
-    char _buffer[50];
-    snprintf(_buffer, sizeof(_buffer), "Setting save level to %d", level);
-    log(_buffer, "AdvancedLogger::setSaveLevel", ADVANCEDLOGGER_WARNING);
+    log(
+        ("Setting save level to " + String(level)).c_str(),
+        "advancedLogger::setSaveLevel",
+        ADVANCEDLOGGER_INFO);
     _saveLevel = _saturateLogLevel(level);
     _saveLogLevelsToSpiffs();
 }
@@ -106,7 +108,7 @@ void AdvancedLogger::setDefaultLogLevels()
 {
     setPrintLevel(ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL);
     setSaveLevel(ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL);
-    log("Log levels set to default", "AdvancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_DEBUG);
+    log("Log levels set to default", "advancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_DEBUG);
 }
 
 bool AdvancedLogger::setLogLevelsFromSpiffs()
@@ -116,9 +118,10 @@ bool AdvancedLogger::setLogLevelsFromSpiffs()
     File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "r");
     if (!_file)
     {
-        char _buffer[50 + strlen(ADVANCEDLOGGER_CONFIG_PATH)];
-        snprintf(_buffer, sizeof(_buffer), "Failed to open file %s", ADVANCEDLOGGER_CONFIG_PATH);
-        log(_buffer, "utils::deserializeJsonFromSpiffs", ADVANCEDLOGGER_ERROR);
+        log(
+            ("Failed to open file " + String(ADVANCEDLOGGER_CONFIG_PATH)).c_str(),
+            "utils::deserializeJsonFromSpiffs",
+            ADVANCEDLOGGER_ERROR);
         return false;
     }
     JsonDocument _jsonDocument;
@@ -127,9 +130,10 @@ bool AdvancedLogger::setLogLevelsFromSpiffs()
     _file.close();
     if (_error)
     {
-        char _buffer[50 + strlen(ADVANCEDLOGGER_CONFIG_PATH) + strlen(_error.c_str())];
-        snprintf(_buffer, sizeof(_buffer), "Failed to deserialize file %s. Error: %s", ADVANCEDLOGGER_CONFIG_PATH, _error.c_str());
-        log(_buffer, "utils::deserializeJsonFromSpiffs", ADVANCEDLOGGER_ERROR);
+        log(
+            ("Failed to deserialize file " + String(ADVANCEDLOGGER_CONFIG_PATH) + ". Error: " + String(_error.c_str())).c_str(),
+            "utils::deserializeJsonFromSpiffs",
+            ADVANCEDLOGGER_ERROR);
         return false;
     }
 
@@ -141,38 +145,9 @@ bool AdvancedLogger::setLogLevelsFromSpiffs()
     }
     setPrintLevel(_jsonDocument["level"]["print"].as<int>());
     setSaveLevel(_jsonDocument["level"]["save"].as<int>());
-    log("Log levels set from SPIFFS", "AdvancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_DEBUG);
+    log("Log levels set from SPIFFS", "advancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_DEBUG);
 
     return true;
-}
-
-void AdvancedLogger::clearLog()
-{
-    logOnly("Clearing log", "AdvancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
-    SPIFFS.remove(ADVANCEDLOGGER_LOG_PATH);
-    File _file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "w");
-    if (!_file)
-    {
-        logOnly("Failed to open log file", "AdvancedLogger::clearLog", ADVANCEDLOGGER_ERROR);
-        return;
-    }
-    _file.close();
-    log("Log cleared", "AdvancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
-}
-
-void AdvancedLogger::_save(const char *messageFormatted)
-{
-    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "a");
-    if (file)
-    {
-
-        file.println(messageFormatted);
-        file.close();
-    }
-    else
-    {
-        logOnly("Failed to open log file", "AdvancedLogger::_save", ADVANCEDLOGGER_ERROR);
-    }
 }
 
 void AdvancedLogger::_saveLogLevelsToSpiffs()
@@ -183,12 +158,74 @@ void AdvancedLogger::_saveLogLevelsToSpiffs()
     File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
     if (!_file)
     {
-        log("Failed to open logger.json", "AdvancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
+        log("Failed to open logger.json", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
         return;
     }
     serializeJson(_jsonDocument, _file);
     _file.close();
-    log("Log levels saved to SPIFFS", "AdvancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
+    log("Log levels saved to SPIFFS", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
+}
+
+void AdvancedLogger::clearLog()
+{
+    logOnly("Clearing log", "advancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
+    SPIFFS.remove(ADVANCEDLOGGER_LOG_PATH);
+    File _file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "w");
+    if (!_file)
+    {
+        logOnly("Failed to open log file", "advancedLogger::clearLog", ADVANCEDLOGGER_ERROR);
+        return;
+    }
+    _file.close();
+    log("Log cleared", "advancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
+}
+
+void AdvancedLogger::_save(const char *messageFormatted)
+{
+    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "a");
+    if (file)
+    {
+        file.println(messageFormatted);
+        file.close();
+    }
+    else
+    {
+        logOnly("Failed to open log file", "advancedLogger::_save", ADVANCEDLOGGER_ERROR);
+    }
+}
+
+void AdvancedLogger::dumpToSerial()
+{
+    logOnly(
+        "Dumping log to Serial", 
+        "advancedLogger::dumpToSerial", 
+        ADVANCEDLOGGER_INFO
+    );
+
+    for(int i = 0; i < 2*50; i++) Serial.print("_");
+    Serial.println();
+
+    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
+    if (!file)
+    {
+        logOnly("Failed to open log file", "advancedLogger::dumpToSerial", ADVANCEDLOGGER_ERROR);
+        return;
+    }
+    while (file.available())
+    {
+        Serial.write(file.read());
+        Serial.flush();
+    }
+    file.close();
+
+    for(int i = 0; i < 2*50; i++) Serial.print("_");
+    Serial.println();
+
+    logOnly(
+        "Log dumped to Serial", 
+        "advancedLogger::dumpToSerial", 
+        ADVANCEDLOGGER_INFO
+    );
 }
 
 String AdvancedLogger::_logLevelToString(int logLevel)

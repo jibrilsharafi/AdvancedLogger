@@ -4,7 +4,7 @@
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 07/04/2024
+ * Date: 11/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -40,6 +40,12 @@ AsyncWebServer server(80);
 
 String printLevel;
 String saveLevel;
+
+long lastMillisLogDump = 0;
+const long intervalLogDump = 10000;
+
+long lastMillisLogClear = 0;
+const long intervalLogClear = 30000;
 
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
 const char *ssid = "YOUR_SSID";
@@ -87,6 +93,8 @@ void setup()
     server.begin();
     logger.log("Server started!", "basicServer::setup", ADVANCEDLOGGER_INFO);
 
+    lastMillisLogDump = millis();
+    lastMillisLogClear = millis();
     logger.log("Setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
 }
 
@@ -103,10 +111,20 @@ void loop()
     printLevel = logger.getPrintLevel();
     saveLevel = logger.getSaveLevel();
 
-    if (millis() > 60000)
+    if (millis() - lastMillisLogDump > intervalLogDump)
     {
+        logger.dumpToSerial();
+
+        lastMillisLogDump = millis();
+    }
+    
+    if (millis() - lastMillisLogClear > intervalLogClear)
+    {
+        logger.dumpToSerial();
         logger.clearLog();
         logger.setDefaultLogLevels();
         logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+
+        lastMillisLogClear = millis();
     }
 }
