@@ -1,6 +1,7 @@
 #include "advancedLogger.h"
 
-AdvancedLogger::AdvancedLogger()
+AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePath)
+    : _logFilePath(logFilePath), _configFilePath(configFilePath)
 {
     _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
     _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
@@ -127,7 +128,7 @@ void AdvancedLogger::setDefaultLogLevels()
 
 bool AdvancedLogger::_setConfigFromSpiffs()
 {
-    File file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "r");
+    File file = SPIFFS.open(_configFilePath, "r");
     if (!file)
     {
         log("Failed to open config file for reading", "advancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_ERROR);
@@ -162,7 +163,7 @@ bool AdvancedLogger::_setConfigFromSpiffs()
 
 void AdvancedLogger::_saveConfigToSpiffs()
 {
-    File file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
+    File file = SPIFFS.open(_configFilePath, "w");
     if (!file)
     {
         log("Failed to open config file for writing", "advancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_ERROR);
@@ -188,7 +189,7 @@ void AdvancedLogger::setMaxLogLines(int maxLines)
 
 int AdvancedLogger::getLogLines()
 {
-    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
+    File file = SPIFFS.open(_logFilePath, "r");
     if (!file)
     {
         logOnly("Failed to open log file", "advancedLogger::getLogLines", ADVANCEDLOGGER_ERROR);
@@ -210,8 +211,8 @@ int AdvancedLogger::getLogLines()
 void AdvancedLogger::clearLog()
 {
     logOnly("Clearing log", "advancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
-    SPIFFS.remove(ADVANCEDLOGGER_LOG_PATH);
-    File _file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "w");
+    SPIFFS.remove(_logFilePath);
+    File _file = SPIFFS.open(_logFilePath, "w");
     if (!_file)
     {
         logOnly("Failed to open log file", "advancedLogger::clearLog", ADVANCEDLOGGER_ERROR);
@@ -223,7 +224,7 @@ void AdvancedLogger::clearLog()
 
 void AdvancedLogger::_save(const char *messageFormatted)
 {
-    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "a");
+    File file = SPIFFS.open(_logFilePath, "a");
     if (file)
     {
         file.println(messageFormatted);
@@ -246,7 +247,7 @@ void AdvancedLogger::dumpToSerial()
         Serial.print("_");
     Serial.println();
 
-    File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
+    File file = SPIFFS.open(_logFilePath, "r");
     if (!file)
     {
         logOnly("Failed to open log file", "advancedLogger::dumpToSerial", ADVANCEDLOGGER_ERROR);

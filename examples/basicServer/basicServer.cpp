@@ -34,7 +34,10 @@
 
 #include "advancedLogger.h"
 
-AdvancedLogger logger;
+String customLogPath = "/customPath/log.txt";
+String customConfigPath = "/customPath/config.txt";
+
+AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str()); // Leave empty for default paths
 
 AsyncWebServer server(80);
 

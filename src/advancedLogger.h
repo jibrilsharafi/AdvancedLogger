@@ -43,7 +43,7 @@
 class AdvancedLogger
 {
 public:
-    AdvancedLogger();
+    AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
 
     void begin();
 
@@ -64,6 +64,9 @@ public:
     void dumpToSerial();
 
 private:
+    String _logFilePath;
+    String _configFilePath;
+    
     int _printLevel;
     int _saveLevel;
 
