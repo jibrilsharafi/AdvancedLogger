@@ -4,7 +4,7 @@
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 07/04/2024
+ * Date: 11/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -32,6 +32,12 @@ AdvancedLogger logger;
 String printLevel;
 String saveLevel;
 
+long lastMillisLogDump = 0;
+const long intervalLogDump = 10000;
+
+long lastMillisLogClear = 0;
+const long intervalLogClear = 30000;
+
 void setup()
 {
     // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
@@ -52,6 +58,8 @@ void setup()
     logger.setPrintLevel(ADVANCEDLOGGER_DEBUG);
     logger.setSaveLevel(ADVANCEDLOGGER_INFO);
 
+    lastMillisLogDump = millis();
+    lastMillisLogClear = millis();
     logger.log("Setup done!", "basicUsage::setup", ADVANCEDLOGGER_INFO);
 }
 
@@ -68,10 +76,20 @@ void loop()
     printLevel = logger.getPrintLevel();
     saveLevel = logger.getSaveLevel();
 
-    if (millis() > 60000)
+    if (millis() - lastMillisLogDump > intervalLogDump)
     {
+        logger.dumpToSerial();
+
+        lastMillisLogDump = millis();
+    }
+    
+    if (millis() - lastMillisLogClear > intervalLogClear)
+    {
+        logger.dumpToSerial();
         logger.clearLog();
         logger.setDefaultLogLevels();
-        logger.log("Log cleared!", "basicUsage::loop", ADVANCEDLOGGER_WARNING);
+        logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+
+        lastMillisLogClear = millis();
     }
 }
