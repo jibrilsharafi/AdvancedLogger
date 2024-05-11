@@ -94,8 +94,8 @@ void setup()
     // --------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button><br><br><button onclick=\"window.location.href='/config'\">Explore the configuration</button>"); });
-    server.serveStatic("/log", SPIFFS, ADVANCEDLOGGER_LOG_PATH);
-    server.serveStatic("/config", SPIFFS, ADVANCEDLOGGER_CONFIG_PATH);
+    server.serveStatic("/log", SPIFFS, customLogPath.c_str());
+    server.serveStatic("/config", SPIFFS, customConfigPath.c_str());
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });
     server.begin();
