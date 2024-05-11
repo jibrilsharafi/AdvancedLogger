@@ -12,7 +12,7 @@ void AdvancedLogger::begin()
     {
         setDefaultLogLevels();
     }
-    log("AdvancedLogger initialized", "advancedLogger.cpp::begin", ADVANCEDLOGGER_DEBUG);
+    log("AdvancedLogger initialized", "advancedLogger::begin", ADVANCEDLOGGER_DEBUG);
 }
 
 void AdvancedLogger::log(const char *message, const char *function, int logLevel)
@@ -78,7 +78,7 @@ void AdvancedLogger::setPrintLevel(int level)
 {
     log(
         ("Setting print level to " + String(level)).c_str(),
-        "advancedLogger.cpp::setPrintLevel",
+        "advancedLogger::setPrintLevel",
         ADVANCEDLOGGER_INFO);
     _printLevel = _saturateLogLevel(level);
     _saveLogLevelsToSpiffs();
@@ -88,7 +88,7 @@ void AdvancedLogger::setSaveLevel(int level)
 {
     log(
         ("Setting save level to " + String(level)).c_str(),
-        "advancedLogger.cpp::setSaveLevel",
+        "advancedLogger::setSaveLevel",
         ADVANCEDLOGGER_INFO);
     _saveLevel = _saturateLogLevel(level);
     _saveLogLevelsToSpiffs();
@@ -108,7 +108,7 @@ void AdvancedLogger::setDefaultLogLevels()
 {
     setPrintLevel(ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL);
     setSaveLevel(ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL);
-    log("Log levels set to default", "advancedLogger.cpp::setDefaultLogLevels", ADVANCEDLOGGER_DEBUG);
+    log("Log levels set to default", "advancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_DEBUG);
 }
 
 bool AdvancedLogger::setLogLevelsFromSpiffs()
@@ -145,7 +145,7 @@ bool AdvancedLogger::setLogLevelsFromSpiffs()
     }
     setPrintLevel(_jsonDocument["level"]["print"].as<int>());
     setSaveLevel(_jsonDocument["level"]["save"].as<int>());
-    log("Log levels set from SPIFFS", "advancedLogger.cpp::setLogLevelsFromSpiffs", ADVANCEDLOGGER_DEBUG);
+    log("Log levels set from SPIFFS", "advancedLogger::setLogLevelsFromSpiffs", ADVANCEDLOGGER_DEBUG);
 
     return true;
 }
@@ -158,26 +158,26 @@ void AdvancedLogger::_saveLogLevelsToSpiffs()
     File _file = SPIFFS.open(ADVANCEDLOGGER_CONFIG_PATH, "w");
     if (!_file)
     {
-        log("Failed to open logger.json", "advancedLogger.cpp::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
+        log("Failed to open logger.json", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_ERROR);
         return;
     }
     serializeJson(_jsonDocument, _file);
     _file.close();
-    log("Log levels saved to SPIFFS", "advancedLogger.cpp::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
+    log("Log levels saved to SPIFFS", "advancedLogger::_saveLogLevelsToSpiffs", ADVANCEDLOGGER_DEBUG);
 }
 
 void AdvancedLogger::clearLog()
 {
-    logOnly("Clearing log", "advancedLogger.cpp::clearLog", ADVANCEDLOGGER_WARNING);
+    logOnly("Clearing log", "advancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
     SPIFFS.remove(ADVANCEDLOGGER_LOG_PATH);
     File _file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "w");
     if (!_file)
     {
-        logOnly("Failed to open log file", "advancedLogger.cpp::clearLog", ADVANCEDLOGGER_ERROR);
+        logOnly("Failed to open log file", "advancedLogger::clearLog", ADVANCEDLOGGER_ERROR);
         return;
     }
     _file.close();
-    log("Log cleared", "advancedLogger.cpp::clearLog", ADVANCEDLOGGER_WARNING);
+    log("Log cleared", "advancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
 }
 
 void AdvancedLogger::_save(const char *messageFormatted)
@@ -190,7 +190,7 @@ void AdvancedLogger::_save(const char *messageFormatted)
     }
     else
     {
-        logOnly("Failed to open log file", "advancedLogger.cpp::_save", ADVANCEDLOGGER_ERROR);
+        logOnly("Failed to open log file", "advancedLogger::_save", ADVANCEDLOGGER_ERROR);
     }
 }
 
@@ -198,7 +198,7 @@ void AdvancedLogger::dumpToSerial()
 {
     logOnly(
         "Dumping log to Serial", 
-        "advancedLogger.cpp::dumpToSerial", 
+        "advancedLogger::dumpToSerial", 
         ADVANCEDLOGGER_INFO
     );
 
@@ -208,7 +208,7 @@ void AdvancedLogger::dumpToSerial()
     File file = SPIFFS.open(ADVANCEDLOGGER_LOG_PATH, "r");
     if (!file)
     {
-        logOnly("Failed to open log file", "advancedLogger.cpp::dumpToSerial", ADVANCEDLOGGER_ERROR);
+        logOnly("Failed to open log file", "advancedLogger::dumpToSerial", ADVANCEDLOGGER_ERROR);
         return;
     }
     while (file.available())
@@ -223,7 +223,7 @@ void AdvancedLogger::dumpToSerial()
 
     logOnly(
         "Log dumped to Serial", 
-        "advancedLogger.cpp::dumpToSerial", 
+        "advancedLogger::dumpToSerial", 
         ADVANCEDLOGGER_INFO
     );
 }
