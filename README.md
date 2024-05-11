@@ -60,16 +60,15 @@ Saving should be quite straightforward: just copy any message that is sent to th
 Last but not least, the use should be as simple as possible: you just need to create `AdvancedLogger advancedLogger;` and simply use `advancedLogger.log("Setting up ADE7953...", "main::setup", INFO);`
 
 ## Dependencies
-This project depends on the following libraries:
-- [ArduinoJson](https://github.com/bblanchon/ArduinoJson), version 7.0.0 or later.
+This project has no external dependencies, and uses only the standard libraries.
 
 ## What's next?
-- [ ] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
-- [ ] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
+- [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
+- [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [x] **Dump to serial**: implement a function that dumps the entire log to the serial, so that it can be accessed in real time.
-- [ ] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
+- [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library.
-- [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32S3, but it should be tested on other microcontrollers to ensure compatibility.
+- [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
 - [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
-- [ ] ~~**Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.~~ Not needed, as the format is already quite clear.
+- [x] ~~**Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.~~ Not needed, as the format is already quite clear.

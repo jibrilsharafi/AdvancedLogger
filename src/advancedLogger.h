@@ -28,22 +28,22 @@
 
 #define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 2 // 2 = INFO
 #define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 3  // 3 = WARNING
+#define ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES 1000 // 1000 lines before the log is cleared
 
 #define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
 #define ADVANCEDLOGGER_FORMAT "[%s] [%lu ms] [%s] [Core %d] [%s] %s" // [TIME] [MICROS us] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
 #define ADVANCEDLOGGER_LOG_PATH "/AdvancedLogger/log.txt"
-#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.json"
+#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
 
 #include <Arduino.h>
 
 #include <SPIFFS.h>
-#include <ArduinoJson.h>
 
 class AdvancedLogger
 {
 public:
-    AdvancedLogger();
+    AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
 
     void begin();
 
@@ -56,18 +56,25 @@ public:
     String getSaveLevel();
 
     void setDefaultLogLevels();
-    bool setLogLevelsFromSpiffs();
 
+    void setMaxLogLines(int maxLines);
+    int getLogLines();
     void clearLog();
 
     void dumpToSerial();
 
 private:
+    String _logFilePath;
+    String _configFilePath;
+    
     int _printLevel;
     int _saveLevel;
+
+    int _maxLogLines;
     
     void _save(const char *messageFormatted);
-    void _saveLogLevelsToSpiffs();
+    bool _setConfigFromSpiffs();
+    void _saveConfigToSpiffs();
 
     String _logLevelToString(int logLevel);
     int _saturateLogLevel(int logLevel);
