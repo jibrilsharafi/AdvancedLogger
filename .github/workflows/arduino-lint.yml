@@ -1,0 +1,25 @@
+name: Arduino Lint
+
+on:
+  push:
+    paths:
+      - '**.h'
+      - '**.cpp'
+      - 'library.properties'
+  pull_request:
+    paths:
+      - '**.h'
+      - '**.cpp'
+      - 'library.properties'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: arduino/arduino-lint-action
+      uses: arduino/arduino-lint-action@v1.0.2
+      with:
+        paths: .
