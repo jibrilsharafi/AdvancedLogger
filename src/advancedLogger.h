@@ -35,6 +35,7 @@
 
 #define ADVANCEDLOGGER_LOG_PATH "/AdvancedLogger/log.txt"
 #define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
+#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
 
 #include <Arduino.h>
 
@@ -43,6 +44,7 @@
 class AdvancedLogger
 {
 public:
+    AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
     AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
 
     void begin();
@@ -59,11 +61,18 @@ public:
 
     void setMaxLogLines(int maxLines);
     int getLogLines();
+    void setMaxLogLines(int maxLines);
+    int getLogLines();
     void clearLog();
 
     void dumpToSerial();
 
+    void dumpToSerial();
+
 private:
+    String _logFilePath;
+    String _configFilePath;
+    
     String _logFilePath;
     String _configFilePath;
     
@@ -74,6 +83,8 @@ private:
     int _logLines;
     
     void _save(const char *messageFormatted);
+    bool _setConfigFromSpiffs();
+    void _saveConfigToSpiffs();
     bool _setConfigFromSpiffs();
     void _saveConfigToSpiffs();
 

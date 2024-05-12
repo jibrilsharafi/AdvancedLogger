@@ -38,11 +38,23 @@ String customLogPath = "/customPath/log.txt";
 String customConfigPath = "/customPath/config.txt";
 
 AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str()); // Leave empty for default paths
+String customLogPath = "/customPath/log.txt";
+String customConfigPath = "/customPath/config.txt";
+
+AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str()); // Leave empty for default paths
 
 AsyncWebServer server(80);
 
 String printLevel;
 String saveLevel;
+
+long lastMillisLogDump = 0;
+const long intervalLogDump = 10000;
+
+long lastMillisLogClear = 0;
+const long intervalLogClear = 30000;
+
+int maxLogLines = 10; // Low value for testing purposes
 
 long lastMillisLogDump = 0;
 const long intervalLogDump = 10000;
@@ -78,6 +90,9 @@ void setup()
     // Set the maximum number of log lines before the log is cleared
     // If you don't set this, the default is used
     logger.setMaxLogLines(maxLogLines);
+    // Set the maximum number of log lines before the log is cleared
+    // If you don't set this, the default is used
+    logger.setMaxLogLines(maxLogLines);
     logger.log("AdvancedLogger setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
 
     // Connect to WiFi
@@ -96,11 +111,15 @@ void setup()
               { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button><br><br><button onclick=\"window.location.href='/config'\">Explore the configuration</button>"); });
     server.serveStatic("/log", SPIFFS, customLogPath.c_str());
     server.serveStatic("/config", SPIFFS, customConfigPath.c_str());
+    server.serveStatic("/log", SPIFFS, customLogPath.c_str());
+    server.serveStatic("/config", SPIFFS, customConfigPath.c_str());
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });
     server.begin();
     logger.log("Server started!", "basicServer::setup", ADVANCEDLOGGER_INFO);
 
+    lastMillisLogDump = millis();
+    lastMillisLogClear = millis();
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
     logger.log("Setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
@@ -120,10 +139,19 @@ void loop()
     delay(500);
     logger.logOnly("This is an info message (logOnly)!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
     delay(1000);
+    delay(1000);
 
     printLevel = logger.getPrintLevel();
     saveLevel = logger.getSaveLevel();
 
+    if (millis() - lastMillisLogDump > intervalLogDump)
+    {
+        logger.dumpToSerial();
+
+        lastMillisLogDump = millis();
+    }
+    
+    if (millis() - lastMillisLogClear > intervalLogClear)
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
         logger.dumpToSerial();
@@ -138,9 +166,16 @@ void loop()
             "basicServer::loop",
             ADVANCEDLOGGER_INFO
         );
+        logger.log(
+            ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
+            "basicServer::loop",
+            ADVANCEDLOGGER_INFO
+        );
         logger.clearLog();
         logger.setDefaultLogLevels();
         logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+
+        lastMillisLogClear = millis();
 
         lastMillisLogClear = millis();
     }
