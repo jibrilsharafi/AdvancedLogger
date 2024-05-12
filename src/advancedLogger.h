@@ -26,8 +26,8 @@
 #define ADVANCEDLOGGER_ERROR 4
 #define ADVANCEDLOGGER_FATAL 5
 
-#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 2 // 2 = INFO
-#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 3  // 3 = WARNING
+#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 1 // 1 = DEBUG
+#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 2  // 2 = INFO
 #define ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES 1000 // 1000 lines before the log is cleared
 
 #define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
@@ -71,6 +71,7 @@ private:
     int _saveLevel;
 
     int _maxLogLines;
+    int _logLines;
     
     void _save(const char *messageFormatted);
     bool _setConfigFromSpiffs();

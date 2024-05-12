@@ -6,6 +6,8 @@ AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePa
     _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
     _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
     _maxLogLines = ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES;
+    
+    _logLines = 0;
 }
 
 void AdvancedLogger::begin()
@@ -16,6 +18,7 @@ void AdvancedLogger::begin()
     {
         setDefaultLogLevels();
     }
+    _logLines = getLogLines();
 
     log("AdvancedLogger initialized", "advancedLogger::begin", ADVANCEDLOGGER_DEBUG);
 }
@@ -49,8 +52,9 @@ void AdvancedLogger::log(const char *message, const char *function, int logLevel
     if (logLevel >= _saveLevel)
     {
         _save(_message_formatted);
-        if (getLogLines() > _maxLogLines)
+        if (_logLines >= _maxLogLines)
         {
+            _logLines = 0;
             clearLog();
             log(
                 ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
@@ -224,11 +228,12 @@ void AdvancedLogger::clearLog()
 
 void AdvancedLogger::_save(const char *messageFormatted)
 {
-    File file = SPIFFS.open(_logFilePath, "a");
-    if (file)
+    File _file = SPIFFS.open(_logFilePath, "a");
+    if (_file)
     {
-        file.println(messageFormatted);
-        file.close();
+        _file.println(messageFormatted);
+        _file.close();
+        _logLines++;
     }
     else
     {
@@ -247,18 +252,18 @@ void AdvancedLogger::dumpToSerial()
         Serial.print("_");
     Serial.println();
 
-    File file = SPIFFS.open(_logFilePath, "r");
-    if (!file)
+    File _file = SPIFFS.open(_logFilePath, "r");
+    if (!_file)
     {
         logOnly("Failed to open log file", "advancedLogger::dumpToSerial", ADVANCEDLOGGER_ERROR);
         return;
     }
-    while (file.available())
+    while (_file.available())
     {
-        Serial.write(file.read());
+        Serial.write(_file.read());
         Serial.flush();
     }
-    file.close();
+    _file.close();
 
     for (int i = 0; i < 2 * 50; i++)
         Serial.print("_");
