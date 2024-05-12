@@ -72,3 +72,4 @@ This project has no external dependencies, and uses only the standard libraries.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
 - [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
 - [x] ~~**Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.~~ Not needed, as the format is already quite clear.
+- [ ] **Buffered logging**: the ability to buffer the logs and send them in chunks would be a great addition, as it would allow to save power and reduce the number of writes to the memory. This has been tested, but the results did not show any significant improvement in speed.
