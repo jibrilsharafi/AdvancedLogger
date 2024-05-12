@@ -61,14 +61,21 @@ Last but not least, the use should be as simple as possible: you just need to cr
 
 ## Dependencies
 This project has no external dependencies, and uses only the standard libraries.
+This project has no external dependencies, and uses only the standard libraries.
 
 ## What's next?
+- [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
+- [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
 - [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [x] **Dump to serial**: implement a function that dumps the entire log to the serial, so that it can be accessed in real time.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
+- [x] **Dump to serial**: implement a function that dumps the entire log to the serial, so that it can be accessed in real time.
+- [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library.
+- [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
 - [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
 - [x] ~~**Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.~~ Not needed, as the format is already quite clear.
+- [ ] **Buffered logging**: the ability to buffer the logs and send them in chunks would be a great addition, as it would allow to save power and reduce the number of writes to the memory. This has been tested, but the results did not show any significant improvement in speed.

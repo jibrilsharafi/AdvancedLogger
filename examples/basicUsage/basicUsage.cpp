@@ -4,7 +4,7 @@
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 11/05/2024
+ * Date: 12/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -31,9 +31,21 @@ String customLogPath = "/customPath/log.txt";
 String customConfigPath = "/customPath/config.txt";
 
 AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str()); // Leave empty for default paths
+String customLogPath = "/customPath/log.txt";
+String customConfigPath = "/customPath/config.txt";
+
+AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str()); // Leave empty for default paths
 
 String printLevel;
 String saveLevel;
+
+long lastMillisLogDump = 0;
+const long intervalLogDump = 10000;
+
+long lastMillisLogClear = 0;
+const long intervalLogClear = 30000;
+
+int maxLogLines = 10; // Low value for testing purposes
 
 long lastMillisLogDump = 0;
 const long intervalLogDump = 10000;
@@ -66,7 +78,13 @@ void setup()
     // If you don't set this, the default is used
     logger.setMaxLogLines(maxLogLines);
     logger.log("AdvancedLogger setup done!", "basicUsage::setup", ADVANCEDLOGGER_INFO);
+    // Set the maximum number of log lines before the log is cleared
+    // If you don't set this, the default is used
+    logger.setMaxLogLines(maxLogLines);
+    logger.log("AdvancedLogger setup done!", "basicUsage::setup", ADVANCEDLOGGER_INFO);
 
+    lastMillisLogDump = millis();
+    lastMillisLogClear = millis();
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
     logger.log("Setup done!", "basicUsage::setup", ADVANCEDLOGGER_INFO);
@@ -74,15 +92,15 @@ void setup()
 
 void loop()
 {
-    logger.log("This is an debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
+    logger.log("This is a debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
     delay(500);
     logger.log("This is an info message!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
     delay(500);
-    logger.log("This is an warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+    logger.log("This is a warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
     delay(500);
-    logger.log("This is an error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
+    logger.log("This is a error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
     delay(500);
-    logger.log("This is an fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
+    logger.log("This is a fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
     delay(500);
     logger.logOnly("This is an info message (logOnly)!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
     delay(1000);
@@ -98,7 +116,20 @@ void loop()
     }
     
     if (millis() - lastMillisLogClear > intervalLogClear)
+    if (millis() - lastMillisLogDump > intervalLogDump)
     {
+        logger.dumpToSerial();
+
+        lastMillisLogDump = millis();
+    }
+    
+    if (millis() - lastMillisLogClear > intervalLogClear)
+    {
+        logger.log(
+            ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
+            "basicServer::loop",
+            ADVANCEDLOGGER_INFO
+        );
         logger.log(
             ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
             "basicServer::loop",
@@ -106,6 +137,9 @@ void loop()
         );
         logger.clearLog();
         logger.setDefaultLogLevels();
+        logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+
+        lastMillisLogClear = millis();
         logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
 
         lastMillisLogClear = millis();

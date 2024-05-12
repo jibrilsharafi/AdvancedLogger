@@ -5,7 +5,7 @@
  * advanced logging for the ESP32.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 11/05/2024
+ * Date: 12/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -26,14 +26,15 @@
 #define ADVANCEDLOGGER_ERROR 4
 #define ADVANCEDLOGGER_FATAL 5
 
-#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 2 // 2 = INFO
-#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 3  // 3 = WARNING
+#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 1 // 1 = DEBUG
+#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 2  // 2 = INFO
 #define ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES 1000 // 1000 lines before the log is cleared
 
 #define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
 #define ADVANCEDLOGGER_FORMAT "[%s] [%lu ms] [%s] [Core %d] [%s] %s" // [TIME] [MICROS us] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
 #define ADVANCEDLOGGER_LOG_PATH "/AdvancedLogger/log.txt"
+#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
 #define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
 
 #include <Arduino.h>
@@ -43,6 +44,7 @@
 class AdvancedLogger
 {
 public:
+    AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
     AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
 
     void begin();
@@ -59,7 +61,11 @@ public:
 
     void setMaxLogLines(int maxLines);
     int getLogLines();
+    void setMaxLogLines(int maxLines);
+    int getLogLines();
     void clearLog();
+
+    void dumpToSerial();
 
     void dumpToSerial();
 
@@ -67,12 +73,18 @@ private:
     String _logFilePath;
     String _configFilePath;
     
+    String _logFilePath;
+    String _configFilePath;
+    
     int _printLevel;
     int _saveLevel;
 
     int _maxLogLines;
+    int _logLines;
     
     void _save(const char *messageFormatted);
+    bool _setConfigFromSpiffs();
+    void _saveConfigToSpiffs();
     bool _setConfigFromSpiffs();
     void _saveConfigToSpiffs();
 
