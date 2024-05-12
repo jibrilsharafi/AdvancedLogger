@@ -108,15 +108,15 @@ void setup()
 
 void loop()
 {
-    logger.log("This is an debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
+    logger.log("This is a debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
     delay(500);
     logger.log("This is an info message!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
     delay(500);
-    logger.log("This is an warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+    logger.log("This is a warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
     delay(500);
-    logger.log("This is an error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
+    logger.log("This is a error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
     delay(500);
-    logger.log("This is an fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
+    logger.log("This is a fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
     delay(500);
     logger.logOnly("This is an info message (logOnly)!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
     delay(1000);
