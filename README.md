@@ -1,5 +1,15 @@
 # AdvancedLogger
 
+[![Release](https://img.shields.io/github/v/release/jibrilsharafi/AdvancedLogger)](#release)
+
+[![PlatformIO Registry](https://badges.registry.platformio.org/packages/jijio/library/AdvancedLogger.svg)](https://registry.platformio.org/libraries/jijio/AdvancedLogger)
+
+[![arduino-library-badge](https://www.ardu-badge.com/badge/AdvancedLogger.svg?)](https://www.ardu-badge.com/AdvancedLogger)
+
+[![ESP32](https://img.shields.io/badge/ESP-32S3-000000.svg?longCache=true&style=flat&colorA=CC101F)](https://www.espressif.com/en/products/socs/esp32-S3)
+
+[![BuyMeACoffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/jibrilsharafi)
+
 A **simple** logging library capable of **saving logs to memory** and with a **comprehensive format** capable of including all the accessory information to each message.
 
 Usage:
@@ -8,20 +18,20 @@ AdvancedLogger logger;
 ...
 logger.begin();
 ...
-logger.log("This is an info message!", "main::loop", ADVANCEDLOGGER_INFO);
+logger.log("This is an info message!", "main::setup", ADVANCEDLOGGER_INFO);
 delay(1000);
 logger.log("This is an error message!!", "main::loop", ADVANCEDLOGGER_ERROR);
 ```
 Output (both in the Serial and in the log file in memory):
 ```cpp
-[2024-03-23 09:44:10] [1450 ms] [INFO] [Core 1] [main::loop] This is an info message!
-[2024-03-23 09:44:11] [1550 ms] [ERROR] [Core 1] [main::loop] This is an error message!!
+[2024-03-23 09:44:10] [1450 ms] [INFO] [Core 1] [main::setup] This is an info message!
+[2024-03-23 09:44:12] [3250 ms] [ERROR] [Core 1] [main::loop] This is an error message!!
 ```
 For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.cpp) and [basicServer](examples/basicServer/basicServer.cpp) in the examples folder.
 
 ## Why?
 There is no way of sugar-coat it: *every well-developed project will eventually need a proper logging* in place to make sure that not only everything is fully monitored, but also that everything monitored is later accessible for debugging. 
-The development of the [[EnergyMe]] (my open-source energy monitoring device) quickly led to the necessity of having such feature. Nonetheless, I quickly found out that no repositories on GitHub where available capable of fully covering all of my [[#Requirements]].
+The development of [EnergyMe](https://github.com/jibrilsharafi/EnergyMe-Home) (my open-source energy monitoring device) quickly led to the necessity of having such feature. Nonetheless, I quickly found out that no repositories on GitHub where available capable of fully covering all of my [Requirements](#requirements).
 ### Requirements
 Does it exist a C++ module for the ESP32 (the projects I am currently working on use this microcontroller) that allows logging with the following features:
 - **Format**: a comprehensive format capable of including all the accessory information to each print message. Something like: `[2024-03-13 09:44:10] [1313 ms] [INFO] [Core 1] [main::setup] Setting up ADE7953...`, which indeed explains very clearly the nature and context of the message. This type of logging is the norm in more complex systems and environments. 
@@ -42,7 +52,6 @@ Many other similar libraries exists, but it is clear that **none of the reported
 ## How?
 The rule is one: *keep it simple*.
 I am in no way a advanced coder, and as such I tend to structure and write code to be as streamlined and simple as possible. So, no memory optimization or any of the pointer-magic stuff in C++. *Not my kink*.
-Let's start from the [[#Requirements]].
 ### Format
 **The format** of the message should **include any information** that could store **any value**. As such, everything related to the time should be logged, along with information about the location of the code in which the log takes place, as well as having different logging levels. 
 We can set a custom format by using the function `sprintf` and passing the following as third argument: 
@@ -61,11 +70,8 @@ Last but not least, the use should be as simple as possible: you just need to cr
 
 ## Dependencies
 This project has no external dependencies, and uses only the standard libraries.
-This project has no external dependencies, and uses only the standard libraries.
 
 ## What's next?
-- [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
-- [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
 - [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
@@ -73,8 +79,7 @@ This project has no external dependencies, and uses only the standard libraries.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [x] **Dump to serial**: implement a function that dumps the entire log to the serial, so that it can be accessed in real time.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
-- [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library.
-- [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
+- [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library. Some effort has been made in this direction, but the nested folder approach gave some problems.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
 - [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
 - [x] ~~**Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.~~ Not needed, as the format is already quite clear.
