@@ -7,6 +7,7 @@
  * Author: Jibril Sharafi, @jibrilsharafi
  * Date: 12/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
+ * Version: 1.1.3
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
