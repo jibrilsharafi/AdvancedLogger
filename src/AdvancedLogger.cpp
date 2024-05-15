@@ -1,5 +1,8 @@
 #include "AdvancedLogger.h"
 
+// TODO: Write the documentation for all the functions and report in README.md
+// TODO: Add a custom timestamp format option
+
 AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePath)
     : _logFilePath(logFilePath), _configFilePath(configFilePath)
 {
@@ -12,7 +15,7 @@ AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePa
 
 void AdvancedLogger::begin()
 {
-    log("Initializing AdvancedLogger...", "AdvancedLogger::begin", ADVANCEDLOGGER_DEBUG);
+    debug("Initializing AdvancedLogger...", "AdvancedLogger::begin");
 
     if (!_setConfigFromSpiffs())
     {
@@ -20,13 +23,38 @@ void AdvancedLogger::begin()
     }
     _logLines = getLogLines();
 
-    log("AdvancedLogger initialized", "AdvancedLogger::begin", ADVANCEDLOGGER_DEBUG);
+    debug("AdvancedLogger initialized", "AdvancedLogger::begin");
 }
 
-void AdvancedLogger::log(const char *message, const char *function, int logLevel)
+void AdvancedLogger::debug(const char *message, const char *function, bool logOnly = false)
+{
+    _log(message, function, ADVANCEDLOGGER_DEBUG, logOnly);
+}
+
+void AdvancedLogger::info(const char *message, const char *function, bool logOnly = false)
+{
+    _log(message, function, ADVANCEDLOGGER_INFO, logOnly);
+}
+
+void AdvancedLogger::warning(const char *message, const char *function, bool logOnly = false)
+{
+    _log(message, function, ADVANCEDLOGGER_WARNING, logOnly);
+}
+
+void AdvancedLogger::error(const char *message, const char *function, bool logOnly = false)
+{
+    _log(message, function, ADVANCEDLOGGER_ERROR, logOnly);
+}
+
+void AdvancedLogger::fatal(const char *message, const char *function, bool logOnly = false)
+{
+    _log(message, function, ADVANCEDLOGGER_FATAL, logOnly);
+}
+
+void AdvancedLogger::_log(const char *message, const char *function, int logLevel, bool logOnly = false)
 {
     logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _printLevel && logLevel < _saveLevel)
+    if (logLevel < _printLevel && (logOnly || logLevel < _saveLevel))
     {
         return;
     }
@@ -44,69 +72,38 @@ void AdvancedLogger::log(const char *message, const char *function, int logLevel
         function,
         message);
 
-    if (logLevel >= _printLevel)
-    {
-        Serial.println(_message_formatted);
-    }
+    Serial.println(_message_formatted);
 
-    if (logLevel >= _saveLevel)
+    if (!logOnly && logLevel >= _saveLevel)
     {
         _save(_message_formatted);
         if (_logLines >= _maxLogLines)
         {
             _logLines = 0;
             clearLog();
-            log(
+            _log(
                 ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
                 "AdvancedLogger::log",
-                ADVANCEDLOGGER_WARNING);
+                ADVANCEDLOGGER_WARNING,
+                true); // Avoid recursive saving
         }
-    }
-}
-
-void AdvancedLogger::logOnly(const char *message, const char *function, int logLevel)
-{
-    logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _printLevel)
-    {
-        return;
-    }
-
-    char _message_formatted[26 + strlen(message) + strlen(function) + 70]; // 26 = length of timestamp, 70 = length of log level
-
-    snprintf(
-        _message_formatted,
-        sizeof(_message_formatted),
-        ADVANCEDLOGGER_FORMAT,
-        _getTimestamp().c_str(),
-        millis(),
-        _logLevelToString(logLevel).c_str(),
-        xPortGetCoreID(),
-        function,
-        message);
-
-    if (logLevel >= _printLevel)
-    {
-        Serial.println(_message_formatted);
     }
 }
 
 void AdvancedLogger::setPrintLevel(int level)
 {
-    log(
+    info(
         ("Setting print level to " + String(level)).c_str(),
-        "AdvancedLogger::setPrintLevel",
-        ADVANCEDLOGGER_INFO);
+        "AdvancedLogger::setPrintLevel");
     _printLevel = _saturateLogLevel(level);
     _saveConfigToSpiffs();
 }
 
 void AdvancedLogger::setSaveLevel(int level)
 {
-    log(
+    info(
         ("Setting save level to " + String(level)).c_str(),
-        "AdvancedLogger::setSaveLevel",
-        ADVANCEDLOGGER_INFO);
+        "AdvancedLogger::setSaveLevel");
     _saveLevel = _saturateLogLevel(level);
     _saveConfigToSpiffs();
 }
@@ -127,7 +124,7 @@ void AdvancedLogger::setDefaultLogLevels()
     setSaveLevel(ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL);
     setMaxLogLines(ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES);
 
-    log("Log levels set to default", "AdvancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_INFO);
+    info("Log levels set to default", "AdvancedLogger::setDefaultLogLevels");
 }
 
 bool AdvancedLogger::_setConfigFromSpiffs()
@@ -135,7 +132,7 @@ bool AdvancedLogger::_setConfigFromSpiffs()
     File _file = SPIFFS.open(_configFilePath, "r");
     if (!_file)
     {
-        log("Failed to open config file for reading", "AdvancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_ERROR);
+        error("Failed to open config file for reading", "AdvancedLogger::_setConfigFromSpiffs");
         return false;
     }
 
@@ -161,7 +158,7 @@ bool AdvancedLogger::_setConfigFromSpiffs()
     }
 
     _file.close();
-    log("Log levels set from SPIFFS", "AdvancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_DEBUG);
+    debug("Log levels set from SPIFFS", "AdvancedLogger::_setConfigFromSpiffs");
     return true;
 }
 
@@ -170,7 +167,7 @@ void AdvancedLogger::_saveConfigToSpiffs()
     File _file = SPIFFS.open(_configFilePath, "w");
     if (!_file)
     {
-        log("Failed to open config file for writing", "AdvancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_ERROR);
+        error("Failed to open config file for writing", "AdvancedLogger::_saveConfigToSpiffs");
         return;
     }
 
@@ -178,15 +175,14 @@ void AdvancedLogger::_saveConfigToSpiffs()
     _file.println(String("saveLevel=") + String(_saveLevel));
     _file.println(String("maxLogLines=") + String(_maxLogLines));
     _file.close();
-    log("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_DEBUG);
+    debug("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToSpiffs");
 }
 
 void AdvancedLogger::setMaxLogLines(int maxLines)
 {
-    log(
+    info(
         ("Setting max log lines to " + String(maxLines)).c_str(),
-        "AdvancedLogger::setMaxLogLines",
-        ADVANCEDLOGGER_INFO);
+        "AdvancedLogger::setMaxLogLines");
     _maxLogLines = maxLines;
     _saveConfigToSpiffs();
 }
@@ -196,7 +192,7 @@ int AdvancedLogger::getLogLines()
     File _file = SPIFFS.open(_logFilePath, "r");
     if (!_file)
     {
-        logOnly("Failed to open log file", "AdvancedLogger::getLogLines", ADVANCEDLOGGER_ERROR);
+        error("Failed to open log file", "AdvancedLogger::getLogLines", true);
         return -1;
     }
 
@@ -214,16 +210,16 @@ int AdvancedLogger::getLogLines()
 
 void AdvancedLogger::clearLog()
 {
-    logOnly("Clearing log", "AdvancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
+    warning("Clearing log", "AdvancedLogger::clearLog", true); // Avoid recursive saving
     SPIFFS.remove(_logFilePath);
     File _file = SPIFFS.open(_logFilePath, "w");
     if (!_file)
     {
-        logOnly("Failed to open log file", "AdvancedLogger::clearLog", ADVANCEDLOGGER_ERROR);
+        error("Failed to open log file", "AdvancedLogger::clearLog", true); // Avoid recursive saving
         return;
     }
     _file.close();
-    log("Log cleared", "AdvancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
+    warning("Log cleared", "AdvancedLogger::clearLog", true); // Avoid recursive saving
 }
 
 void AdvancedLogger::_save(const char *messageFormatted)
@@ -237,16 +233,13 @@ void AdvancedLogger::_save(const char *messageFormatted)
     }
     else
     {
-        logOnly("Failed to open log file", "AdvancedLogger::_save", ADVANCEDLOGGER_ERROR);
+        error("Failed to open log file", "AdvancedLogger::_save", true); // Avoid recursive saving
     }
 }
 
 void AdvancedLogger::dumpToSerial()
 {
-    logOnly(
-        "Dumping log to Serial",
-        "AdvancedLogger::dumpToSerial",
-        ADVANCEDLOGGER_INFO);
+    info("Dumping log to Serial", "AdvancedLogger::dumpToSerial", true);
 
     for (int i = 0; i < 2 * 50; i++)
         Serial.print("_");
@@ -255,7 +248,7 @@ void AdvancedLogger::dumpToSerial()
     File _file = SPIFFS.open(_logFilePath, "r");
     if (!_file)
     {
-        logOnly("Failed to open log file", "AdvancedLogger::dumpToSerial", ADVANCEDLOGGER_ERROR);
+        error("Failed to open log file", "AdvancedLogger::dumpToSerial", true); // Avoid recursive saving
         return;
     }
     while (_file.available())
@@ -269,10 +262,7 @@ void AdvancedLogger::dumpToSerial()
         Serial.print("_");
     Serial.println();
 
-    logOnly(
-        "Log dumped to Serial",
-        "AdvancedLogger::dumpToSerial",
-        ADVANCEDLOGGER_INFO);
+    info("Log dumped to Serial", "AdvancedLogger::dumpToSerial", true);
 }
 
 String AdvancedLogger::_logLevelToString(int logLevel)

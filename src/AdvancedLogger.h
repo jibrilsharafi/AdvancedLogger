@@ -48,8 +48,12 @@ public:
 
     void begin();
 
-    void log(const char *message, const char *function, int logLevel);
-    void logOnly(const char *message, const char *function, int logLevel);
+    void debug(const char *message, const char *function, bool logOnly = false);
+    void info(const char *message, const char *function, bool logOnly = false);
+    void warning(const char *message, const char *function, bool logOnly = false);
+    void error(const char *message, const char *function, bool logOnly = false);
+    void fatal(const char *message, const char *function, bool logOnly = false);  
+
     void setPrintLevel(int printLevel);
     void setSaveLevel(int saveLevel);
 
@@ -74,6 +78,7 @@ private:
     int _maxLogLines;
     int _logLines;
     
+    void _log(const char *message, const char *function, int logLevel, bool logOnly = false);
     void _save(const char *messageFormatted);
     bool _setConfigFromSpiffs();
     void _saveConfigToSpiffs();

@@ -78,17 +78,17 @@ void setup()
     // Set the maximum number of log lines before the log is cleared
     // If you don't set this, the default is used
     logger.setMaxLogLines(maxLogLines);
-    logger.log("AdvancedLogger setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
-
+    logger.debug("AdvancedLogger setup done!", "basicServer::setup");
+    
     // Connect to WiFi
     // --------------------
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(1000);
-        logger.log("Connecting to WiFi..", "basicServer::setup", ADVANCEDLOGGER_INFO);
+        logger.info("Connecting to WiFi..", "basicServer::setup");
     }
-    logger.log(("IP address: " + WiFi.localIP().toString()).c_str(), "basicServer::setup", ADVANCEDLOGGER_INFO);
+    logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), "basicServer::setup");
 
     // Serve a simple webpage with a button that sends the user to the page /log and /config
     // --------------------
@@ -99,26 +99,26 @@ void setup()
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });
     server.begin();
-    logger.log("Server started!", "basicServer::setup", ADVANCEDLOGGER_INFO);
+    logger.info("Server started!", "basicServer::setup");
 
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
-    logger.log("Setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
+    logger.info("Setup done!", "basicServer::setup");
 }
 
 void loop()
 {
-    logger.log("This is a debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
+    logger.debug("This is a debug message!", "basicServer::loop");
     delay(500);
-    logger.log("This is an info message!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
+    logger.info("This is an info message!!", "basicServer::loop");
     delay(500);
-    logger.log("This is a warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+    logger.warning("This is a warning message!!!", "basicServer::loop");
     delay(500);
-    logger.log("This is a error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
+    logger.error("This is a error message!!!!", "basicServer::loop");
     delay(500);
-    logger.log("This is a fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
+    logger.fatal("This is a fatal message!!!!!", "basicServer::loop");
     delay(500);
-    logger.logOnly("This is an info message (logOnly)!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
+    logger.info("This is an info message!!", "basicServer::loop", true);
     delay(1000);
 
     printLevel = logger.getPrintLevel();
@@ -133,14 +133,13 @@ void loop()
     
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
-        logger.log(
+        logger.info(
             ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
-            "basicServer::loop",
-            ADVANCEDLOGGER_INFO
+            "basicServer::loop"
         );
         logger.clearLog();
         logger.setDefaultLogLevels();
-        logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+        logger.warning("Log cleared!", "basicServer::loop");
 
         lastMillisLogClear = millis();
     }
