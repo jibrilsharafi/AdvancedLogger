@@ -1,32 +1,50 @@
 #include "AdvancedLogger.h"
 
 // TODO: Write the documentation for all the functions and report in README.md
-// TODO: add wishlist with new changes done
+// TODO: add wishlist with new changes done (look at commits)
 // TODO: implement better way to write messages (with %s, %d, etc)
+// TODO: make the FS optional
 
-AdvancedLogger::AdvancedLogger(FS &fs, const char *logFilePath, const char *configFilePath, const char *timestampFormat)
-    : _fs(fs), _logFilePath(logFilePath), _configFilePath(configFilePath), _timestampFormat(timestampFormat)
+AdvancedLogger::AdvancedLogger(
+    FS &fs,
+    LogLevel printLevel,
+    LogLevel saveLevel,
+    int maxLogLines,
+    const char *logFilePath,
+    const char *configFilePath,
+    const char *timestampFormat)
+    : _fs(fs),
+      _printLevel(printLevel),
+      _saveLevel(saveLevel),
+      _maxLogLines(maxLogLines),
+      _logFilePath(logFilePath),
+      _configFilePath(configFilePath),
+      _timestampFormat(timestampFormat)
 {
     if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
     {
-        log_w("Invalid path for log %s or config file %s, using default paths: %s and %s", _logFilePath, _configFilePath, ADVANCEDLOGGER_LOG_PATH, ADVANCEDLOGGER_CONFIG_PATH);
-        _logFilePath = ADVANCEDLOGGER_LOG_PATH;
-        _configFilePath = ADVANCEDLOGGER_CONFIG_PATH;
+        log_w(
+            "Invalid path for log %s or config file %s, using default paths: %s and %s",
+            _logFilePath,
+            _configFilePath,
+            DEFAULT_LOG_PATH,
+            DEFAULT_CONFIG_PATH);
+
+        _logFilePath = DEFAULT_LOG_PATH;
+        _configFilePath = DEFAULT_CONFIG_PATH;
         _invalidPath = true;
     }
 
     if (!_isValidTimestampFormat(_timestampFormat))
     {
-        log_w("Invalid timestamp format %s, using default format: %s", _timestampFormat, ADVANCEDLOGGER_TIMESTAMP_FORMAT);
-        _timestampFormat = ADVANCEDLOGGER_TIMESTAMP_FORMAT;
+        log_w(
+            "Invalid timestamp format %s, using default format: %s",
+            _timestampFormat,
+            DEFAULT_TIMESTAMP_FORMAT);
+
+        _timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
         _invalidTimestampFormat = true;
     }
-
-    _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
-    _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
-    _maxLogLines = ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES;
-
-    _logLines = 0;
 }
 
 void AdvancedLogger::begin()
@@ -44,9 +62,9 @@ void AdvancedLogger::begin()
         warning(
             (
                 "Invalid path for log or config file, using default paths: " +
-                String(ADVANCEDLOGGER_LOG_PATH) +
+                String(DEFAULT_LOG_PATH) +
                 " and " +
-                String(ADVANCEDLOGGER_CONFIG_PATH))
+                String(DEFAULT_CONFIG_PATH))
                 .c_str(),
             "AdvancedLogger::begin");
     }
@@ -55,7 +73,7 @@ void AdvancedLogger::begin()
         warning(
             (
                 "Invalid timestamp format, using default format: " +
-                String(ADVANCEDLOGGER_TIMESTAMP_FORMAT))
+                String(DEFAULT_TIMESTAMP_FORMAT))
                 .c_str(),
             "AdvancedLogger::begin");
     }
@@ -65,33 +83,33 @@ void AdvancedLogger::begin()
 
 void AdvancedLogger::debug(const char *message, const char *function, bool logOnly)
 {
-    _log(message, function, ADVANCEDLOGGER_DEBUG, logOnly);
+    _log(message, function, LogLevel::DEBUG, logOnly);
 }
 
 void AdvancedLogger::info(const char *message, const char *function, bool logOnly)
 {
-    _log(message, function, ADVANCEDLOGGER_INFO, logOnly);
+    _log(message, function, LogLevel::INFO, logOnly);
 }
 
 void AdvancedLogger::warning(const char *message, const char *function, bool logOnly)
 {
-    _log(message, function, ADVANCEDLOGGER_WARNING, logOnly);
+    _log(message, function, LogLevel::WARNING, logOnly);
 }
 
 void AdvancedLogger::error(const char *message, const char *function, bool logOnly)
 {
-    _log(message, function, ADVANCEDLOGGER_ERROR, logOnly);
+    _log(message, function, LogLevel::ERROR, logOnly);
 }
 
 void AdvancedLogger::fatal(const char *message, const char *function, bool logOnly)
 {
-    _log(message, function, ADVANCEDLOGGER_FATAL, logOnly);
+    _log(message, function, LogLevel::FATAL, logOnly);
 }
 
-void AdvancedLogger::_log(const char *message, const char *function, int logLevel, bool logOnly)
+void AdvancedLogger::_log(const char *message, const char *function, LogLevel logLevel, bool logOnly)
 {
     logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _printLevel && (logOnly || logLevel < _saveLevel))
+    if (static_cast<int>(logLevel) < static_cast<int>(_printLevel) && (logOnly || static_cast<int>(logLevel) < static_cast<int>(_saveLevel)))
     {
         return;
     }
@@ -101,7 +119,7 @@ void AdvancedLogger::_log(const char *message, const char *function, int logLeve
     snprintf(
         _message_formatted,
         sizeof(_message_formatted),
-        ADVANCEDLOGGER_FORMAT,
+        LOG_FORMAT,
         _getTimestamp().c_str(),
         millis(),
         _logLevelToString(logLevel).c_str(),
@@ -118,29 +136,28 @@ void AdvancedLogger::_log(const char *message, const char *function, int logLeve
         {
             _logLines = 0;
             clearLog();
-            _log(
+            warning(
                 ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
-                "AdvancedLogger::log",
-                ADVANCEDLOGGER_WARNING);
+                "AdvancedLogger::log");
         }
     }
 }
 
-void AdvancedLogger::setPrintLevel(int level)
+void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 {
     info(
-        ("Setting print level to " + String(level)).c_str(),
+        ("Setting print level to " + _logLevelToString(logLevel)).c_str(),
         "AdvancedLogger::setPrintLevel");
-    _printLevel = _saturateLogLevel(level);
+    _printLevel = _saturateLogLevel(logLevel);
     _saveConfigToFs();
 }
 
-void AdvancedLogger::setSaveLevel(int level)
+void AdvancedLogger::setSaveLevel(LogLevel logLevel)
 {
     info(
-        ("Setting save level to " + String(level)).c_str(),
+        ("Setting save level to " + _logLevelToString(logLevel)).c_str(),
         "AdvancedLogger::setSaveLevel");
-    _saveLevel = _saturateLogLevel(level);
+    _saveLevel = _saturateLogLevel(logLevel);
     _saveConfigToFs();
 }
 
@@ -156,9 +173,9 @@ String AdvancedLogger::getSaveLevel()
 
 void AdvancedLogger::setDefaultLogLevels()
 {
-    setPrintLevel(ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL);
-    setSaveLevel(ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL);
-    setMaxLogLines(ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES);
+    setPrintLevel(LogLevel::DEBUG);
+    setSaveLevel(LogLevel::INFO);
+    setMaxLogLines(DEFAULT_MAX_LOG_LINES);
 
     info("Log levels set to default", "AdvancedLogger::setDefaultLogLevels");
 }
@@ -181,11 +198,11 @@ bool AdvancedLogger::_setConfigFromFs()
 
         if (key == "printLevel")
         {
-            setPrintLevel(value.toInt());
+            setPrintLevel(_stringToLogLevel(value));
         }
         else if (key == "saveLevel")
         {
-            setSaveLevel(value.toInt());
+            setSaveLevel(_stringToLogLevel(value));
         }
         else if (key == "maxLogLines")
         {
@@ -207,8 +224,8 @@ void AdvancedLogger::_saveConfigToFs()
         return;
     }
 
-    _file.println(String("printLevel=") + String(_printLevel));
-    _file.println(String("saveLevel=") + String(_saveLevel));
+    _file.println(String("printLevel=") + _logLevelToString(_printLevel));
+    _file.println(String("saveLevel=") + _logLevelToString(_saveLevel));
     _file.println(String("maxLogLines=") + String(_maxLogLines));
     _file.close();
     debug("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToFs");
@@ -301,30 +318,44 @@ void AdvancedLogger::dumpToSerial()
     info("Log dumped to Serial", "AdvancedLogger::dumpToSerial", true);
 }
 
-String AdvancedLogger::_logLevelToString(int logLevel)
+String AdvancedLogger::_logLevelToString(LogLevel logLevel)
 {
     switch (logLevel)
     {
-    case ADVANCEDLOGGER_VERBOSE:
-        return "VERBOSE";
-    case ADVANCEDLOGGER_DEBUG:
+    case LogLevel::DEBUG:
         return "DEBUG";
-    case ADVANCEDLOGGER_INFO:
+    case LogLevel::INFO:
         return "INFO";
-    case ADVANCEDLOGGER_WARNING:
+    case LogLevel::WARNING:
         return "WARNING";
-    case ADVANCEDLOGGER_ERROR:
+    case LogLevel::ERROR:
         return "ERROR";
-    case ADVANCEDLOGGER_FATAL:
+    case LogLevel::FATAL:
         return "FATAL";
     default:
         return "UNKNOWN";
     }
 }
 
-int AdvancedLogger::_saturateLogLevel(int logLevel)
+LogLevel AdvancedLogger::_stringToLogLevel(const String &logLevelStr)
 {
-    return min(max(logLevel, ADVANCEDLOGGER_VERBOSE), ADVANCEDLOGGER_FATAL);
+    if (logLevelStr == "DEBUG")
+        return LogLevel::DEBUG;
+    else if (logLevelStr == "INFO")
+        return LogLevel::INFO;
+    else if (logLevelStr == "WARNING")
+        return LogLevel::WARNING;
+    else if (logLevelStr == "ERROR")
+        return LogLevel::ERROR;
+    else if (logLevelStr == "FATAL")
+        return LogLevel::FATAL;
+    else
+        return LogLevel::INFO; // default value
+}
+
+LogLevel AdvancedLogger::_saturateLogLevel(LogLevel logLevel)
+{
+    return static_cast<LogLevel>(max(min(static_cast<int>(logLevel), static_cast<int>(LogLevel::FATAL)), static_cast<int>(LogLevel::DEBUG)));
 }
 
 String AdvancedLogger::_getTimestamp()

@@ -20,34 +20,49 @@
 #ifndef ADVANCEDLOGGER_H
 #define ADVANCEDLOGGER_H
 
-#define ADVANCEDLOGGER_VERBOSE 0
-#define ADVANCEDLOGGER_DEBUG 1
-#define ADVANCEDLOGGER_INFO 2
-#define ADVANCEDLOGGER_WARNING 3
-#define ADVANCEDLOGGER_ERROR 4
-#define ADVANCEDLOGGER_FATAL 5
+constexpr int DEFAULT_MAX_LOG_LINES = 1000;
 
-#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 1      // 1 = DEBUG
-#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 2       // 2 = INFO
-#define ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES 1000 // 1000 lines before the log is cleared
+constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
+constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
 
-#define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
-#define ADVANCEDLOGGER_FORMAT "[%s] [%lu ms] [%s] [Core %d] [%s] %s" // [TIME] [MICROS us] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
+constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
 
-#define ADVANCEDLOGGER_LOG_PATH "/AdvancedLogger/log.txt"
-#define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
+constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
 #include <Arduino.h>
 #include <FS.h>
 
+enum class LogLevel : int {
+    VERBOSE = 0,
+    DEBUG = 1,
+    INFO = 2,
+    WARNING = 3,
+    ERROR = 4,
+    FATAL = 5
+};
+
 class AdvancedLogger
 {
 public:
+    /**
+     * Constructs a new AdvancedLogger.
+     *
+     * @param fs The file system to use.
+     * @param printLevel The minimum log level to print. Should be a value from the LogLevel enum class.
+     * @param saveLevel The minimum log level to save. Should be a value from the LogLevel enum class.
+     * @param maxLogLines The maximum number of log lines to save.
+     * @param logFilePath The path to the log file.
+     * @param configFilePath The path to the config file.
+     * @param timestampFormat The format to use for timestamps.
+     */
     AdvancedLogger(
         FS &fs,
-        const char *logFilePath = ADVANCEDLOGGER_LOG_PATH,
-        const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH,
-        const char *timestampFormat = ADVANCEDLOGGER_TIMESTAMP_FORMAT);
+        LogLevel printLevel = LogLevel::DEBUG,
+        LogLevel saveLevel = LogLevel::INFO,
+        int maxLogLines = DEFAULT_MAX_LOG_LINES,
+        const char *logFilePath = DEFAULT_LOG_PATH,
+        const char *configFilePath = DEFAULT_CONFIG_PATH,
+        const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
 
     void begin();
 
@@ -57,8 +72,8 @@ public:
     void error(const char *message, const char *function, bool logOnly = false);
     void fatal(const char *message, const char *function, bool logOnly = false);
 
-    void setPrintLevel(int printLevel);
-    void setSaveLevel(int saveLevel);
+    void setPrintLevel(LogLevel logLevel);
+    void setSaveLevel(LogLevel logLevel);
 
     String getPrintLevel();
     String getSaveLevel();
@@ -77,19 +92,20 @@ private:
     String _logFilePath;
     String _configFilePath;
 
-    int _printLevel;
-    int _saveLevel;
+    LogLevel _printLevel;
+    LogLevel _saveLevel;
 
     int _maxLogLines;
-    int _logLines;
+    int _logLines = 0;
 
-    void _log(const char *message, const char *function, int logLevel, bool logOnly = false);
+    void _log(const char *message, const char *function, LogLevel logLevel, bool logOnly = false);
     void _save(const char *messageFormatted);
     bool _setConfigFromFs();
     void _saveConfigToFs();
 
-    String _logLevelToString(int logLevel);
-    int _saturateLogLevel(int logLevel);
+    String _logLevelToString(LogLevel logLevel);
+    LogLevel _stringToLogLevel(const String &logLevelStr);
+    LogLevel _saturateLogLevel(LogLevel logLevel);
 
     const char *_timestampFormat;
     String _getTimestamp();
