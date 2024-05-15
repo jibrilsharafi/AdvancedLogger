@@ -1,11 +1,23 @@
 #include "AdvancedLogger.h"
 
 // TODO: Write the documentation for all the functions and report in README.md
-// TODO: Add a custom timestamp format option
 
-AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePath)
-    : _logFilePath(logFilePath), _configFilePath(configFilePath)
+AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePath, const char *timestampFormat)
+    : _logFilePath(logFilePath), _configFilePath(configFilePath), _timestampFormat(timestampFormat)
 {
+    if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
+    {
+        _logFilePath = ADVANCEDLOGGER_LOG_PATH;
+        _configFilePath = ADVANCEDLOGGER_CONFIG_PATH;
+        _invalidPath = true;
+    }
+
+    if (!_isValidTimestampFormat(_timestampFormat))
+    {
+        _timestampFormat = ADVANCEDLOGGER_TIMESTAMP_FORMAT;
+        _invalidTimestampFormat = true;
+    }
+
     _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
     _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
     _maxLogLines = ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES;
@@ -23,35 +35,56 @@ void AdvancedLogger::begin()
     }
     _logLines = getLogLines();
 
+    if (_invalidPath)
+    {
+        warning(
+            (
+                "Invalid path for log or config file, using default paths: " +
+                String(ADVANCEDLOGGER_LOG_PATH) +
+                " and " +
+                String(ADVANCEDLOGGER_CONFIG_PATH))
+                .c_str(),
+            "AdvancedLogger::begin");
+    }
+    if (_invalidTimestampFormat)
+    {
+        warning(
+            (
+                "Invalid timestamp format, using default format: " +
+                String(ADVANCEDLOGGER_TIMESTAMP_FORMAT))
+                .c_str(),
+            "AdvancedLogger::begin");
+    }
+
     debug("AdvancedLogger initialized", "AdvancedLogger::begin");
 }
 
-void AdvancedLogger::debug(const char *message, const char *function, bool logOnly = false)
+void AdvancedLogger::debug(const char *message, const char *function, bool logOnly)
 {
     _log(message, function, ADVANCEDLOGGER_DEBUG, logOnly);
 }
 
-void AdvancedLogger::info(const char *message, const char *function, bool logOnly = false)
+void AdvancedLogger::info(const char *message, const char *function, bool logOnly)
 {
     _log(message, function, ADVANCEDLOGGER_INFO, logOnly);
 }
 
-void AdvancedLogger::warning(const char *message, const char *function, bool logOnly = false)
+void AdvancedLogger::warning(const char *message, const char *function, bool logOnly)
 {
     _log(message, function, ADVANCEDLOGGER_WARNING, logOnly);
 }
 
-void AdvancedLogger::error(const char *message, const char *function, bool logOnly = false)
+void AdvancedLogger::error(const char *message, const char *function, bool logOnly)
 {
     _log(message, function, ADVANCEDLOGGER_ERROR, logOnly);
 }
 
-void AdvancedLogger::fatal(const char *message, const char *function, bool logOnly = false)
+void AdvancedLogger::fatal(const char *message, const char *function, bool logOnly)
 {
     _log(message, function, ADVANCEDLOGGER_FATAL, logOnly);
 }
 
-void AdvancedLogger::_log(const char *message, const char *function, int logLevel, bool logOnly = false)
+void AdvancedLogger::_log(const char *message, const char *function, int logLevel, bool logOnly)
 {
     logLevel = _saturateLogLevel(logLevel);
     if (logLevel < _printLevel && (logOnly || logLevel < _saveLevel))
@@ -293,11 +326,61 @@ int AdvancedLogger::_saturateLogLevel(int logLevel)
 
 String AdvancedLogger::_getTimestamp()
 {
-    struct tm *_timeinfo;
-    char _timestamp[26];
+    char _timestamp[1024];
 
-    long _time = static_cast<long>(time(nullptr));
-    _timeinfo = localtime(&_time);
-    strftime(_timestamp, sizeof(_timestamp), ADVANCEDLOGGER_TIMESTAMP_FORMAT, _timeinfo);
+    time_t _time = time(nullptr);
+    struct tm _timeinfo = *localtime(&_time);
+    strftime(_timestamp, sizeof(_timestamp), _timestampFormat, &_timeinfo);
     return String(_timestamp);
+}
+
+bool AdvancedLogger::_isValidPath(const char *path)
+{
+    const char *invalidChars = "<>:\"/\\|?*";
+    const char *invalidStartChars = ". ";
+    const char *invalidEndChars = " .";
+    const int spiffsMaxPathLength = 31;
+
+    for (int i = 0; i < strlen(invalidChars); i++)
+    {
+        if (strchr(path, invalidChars[i]) != nullptr)
+        {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < strlen(invalidStartChars); i++)
+    {
+        if (path[0] == invalidStartChars[i])
+        {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < strlen(invalidEndChars); i++)
+    {
+        if (path[strlen(path) - 1] == invalidEndChars[i])
+        {
+            return false;
+        }
+    }
+
+    if (strlen(path) > spiffsMaxPathLength)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool AdvancedLogger::_isValidTimestampFormat(const char *format)
+{
+    if (_getTimestamp().length() > 0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }

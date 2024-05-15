@@ -15,7 +15,7 @@
  * It allows you to log messages to the console and to a file on the SPIFFS.
  * You can set the print level and save level, and the library will only log
  * messages accordingly.
-*/
+ */
 
 #ifndef ADVANCEDLOGGER_H
 #define ADVANCEDLOGGER_H
@@ -27,8 +27,8 @@
 #define ADVANCEDLOGGER_ERROR 4
 #define ADVANCEDLOGGER_FATAL 5
 
-#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 1 // 1 = DEBUG
-#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 2  // 2 = INFO
+#define ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL 1      // 1 = DEBUG
+#define ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL 2       // 2 = INFO
 #define ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES 1000 // 1000 lines before the log is cleared
 
 #define ADVANCEDLOGGER_TIMESTAMP_FORMAT "%Y-%m-%d %H:%M:%S"
@@ -44,7 +44,10 @@
 class AdvancedLogger
 {
 public:
-    AdvancedLogger(const char *logFilePath = ADVANCEDLOGGER_LOG_PATH, const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH);
+    AdvancedLogger(
+        const char *logFilePath = ADVANCEDLOGGER_LOG_PATH,
+        const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH,
+        const char *timestampFormat = ADVANCEDLOGGER_TIMESTAMP_FORMAT);
 
     void begin();
 
@@ -52,7 +55,7 @@ public:
     void info(const char *message, const char *function, bool logOnly = false);
     void warning(const char *message, const char *function, bool logOnly = false);
     void error(const char *message, const char *function, bool logOnly = false);
-    void fatal(const char *message, const char *function, bool logOnly = false);  
+    void fatal(const char *message, const char *function, bool logOnly = false);
 
     void setPrintLevel(int printLevel);
     void setSaveLevel(int saveLevel);
@@ -71,13 +74,13 @@ public:
 private:
     String _logFilePath;
     String _configFilePath;
-    
+
     int _printLevel;
     int _saveLevel;
 
     int _maxLogLines;
     int _logLines;
-    
+
     void _log(const char *message, const char *function, int logLevel, bool logOnly = false);
     void _save(const char *messageFormatted);
     bool _setConfigFromSpiffs();
@@ -86,7 +89,13 @@ private:
     String _logLevelToString(int logLevel);
     int _saturateLogLevel(int logLevel);
 
+    const char *_timestampFormat;
     String _getTimestamp();
+    
+    bool _invalidPath = false;
+    bool _invalidTimestampFormat = false;
+    bool _isValidPath(const char *path);
+    bool _isValidTimestampFormat(const char *format);
 };
 
 #endif
