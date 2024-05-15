@@ -38,13 +38,13 @@
 #define ADVANCEDLOGGER_CONFIG_PATH "/AdvancedLogger/config.txt"
 
 #include <Arduino.h>
-
-#include <SPIFFS.h>
+#include <FS.h>
 
 class AdvancedLogger
 {
 public:
     AdvancedLogger(
+        FS &fs,
         const char *logFilePath = ADVANCEDLOGGER_LOG_PATH,
         const char *configFilePath = ADVANCEDLOGGER_CONFIG_PATH,
         const char *timestampFormat = ADVANCEDLOGGER_TIMESTAMP_FORMAT);
@@ -72,6 +72,8 @@ public:
     void dumpToSerial();
 
 private:
+    FS &_fs;
+
     String _logFilePath;
     String _configFilePath;
 
@@ -83,8 +85,8 @@ private:
 
     void _log(const char *message, const char *function, int logLevel, bool logOnly = false);
     void _save(const char *messageFormatted);
-    bool _setConfigFromSpiffs();
-    void _saveConfigToSpiffs();
+    bool _setConfigFromFs();
+    void _saveConfigToFs();
 
     String _logLevelToString(int logLevel);
     int _saturateLogLevel(int logLevel);

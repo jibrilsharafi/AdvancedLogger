@@ -1,12 +1,15 @@
 #include "AdvancedLogger.h"
 
 // TODO: Write the documentation for all the functions and report in README.md
+// TODO: add wishlist with new changes done
+// TODO: implement better way to write messages (with %s, %d, etc)
 
-AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePath, const char *timestampFormat)
-    : _logFilePath(logFilePath), _configFilePath(configFilePath), _timestampFormat(timestampFormat)
+AdvancedLogger::AdvancedLogger(FS &fs, const char *logFilePath, const char *configFilePath, const char *timestampFormat)
+    : _fs(fs), _logFilePath(logFilePath), _configFilePath(configFilePath), _timestampFormat(timestampFormat)
 {
     if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
     {
+        log_w("Invalid path for log %s or config file %s, using default paths: %s and %s", _logFilePath, _configFilePath, ADVANCEDLOGGER_LOG_PATH, ADVANCEDLOGGER_CONFIG_PATH);
         _logFilePath = ADVANCEDLOGGER_LOG_PATH;
         _configFilePath = ADVANCEDLOGGER_CONFIG_PATH;
         _invalidPath = true;
@@ -14,6 +17,7 @@ AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePa
 
     if (!_isValidTimestampFormat(_timestampFormat))
     {
+        log_w("Invalid timestamp format %s, using default format: %s", _timestampFormat, ADVANCEDLOGGER_TIMESTAMP_FORMAT);
         _timestampFormat = ADVANCEDLOGGER_TIMESTAMP_FORMAT;
         _invalidTimestampFormat = true;
     }
@@ -29,7 +33,7 @@ void AdvancedLogger::begin()
 {
     debug("Initializing AdvancedLogger...", "AdvancedLogger::begin");
 
-    if (!_setConfigFromSpiffs())
+    if (!_setConfigFromFs())
     {
         setDefaultLogLevels();
     }
@@ -117,8 +121,7 @@ void AdvancedLogger::_log(const char *message, const char *function, int logLeve
             _log(
                 ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
                 "AdvancedLogger::log",
-                ADVANCEDLOGGER_WARNING,
-                true); // Avoid recursive saving
+                ADVANCEDLOGGER_WARNING);
         }
     }
 }
@@ -129,7 +132,7 @@ void AdvancedLogger::setPrintLevel(int level)
         ("Setting print level to " + String(level)).c_str(),
         "AdvancedLogger::setPrintLevel");
     _printLevel = _saturateLogLevel(level);
-    _saveConfigToSpiffs();
+    _saveConfigToFs();
 }
 
 void AdvancedLogger::setSaveLevel(int level)
@@ -138,7 +141,7 @@ void AdvancedLogger::setSaveLevel(int level)
         ("Setting save level to " + String(level)).c_str(),
         "AdvancedLogger::setSaveLevel");
     _saveLevel = _saturateLogLevel(level);
-    _saveConfigToSpiffs();
+    _saveConfigToFs();
 }
 
 String AdvancedLogger::getPrintLevel()
@@ -160,12 +163,12 @@ void AdvancedLogger::setDefaultLogLevels()
     info("Log levels set to default", "AdvancedLogger::setDefaultLogLevels");
 }
 
-bool AdvancedLogger::_setConfigFromSpiffs()
+bool AdvancedLogger::_setConfigFromFs()
 {
-    File _file = SPIFFS.open(_configFilePath, "r");
+    File _file = _fs.open(_configFilePath, "r");
     if (!_file)
     {
-        error("Failed to open config file for reading", "AdvancedLogger::_setConfigFromSpiffs");
+        error("Failed to open config file for reading", "AdvancedLogger::_setConfigFromFs");
         return false;
     }
 
@@ -191,16 +194,16 @@ bool AdvancedLogger::_setConfigFromSpiffs()
     }
 
     _file.close();
-    debug("Log levels set from SPIFFS", "AdvancedLogger::_setConfigFromSpiffs");
+    debug("Log levels set from SPIFFS", "AdvancedLogger::_setConfigFromFs");
     return true;
 }
 
-void AdvancedLogger::_saveConfigToSpiffs()
+void AdvancedLogger::_saveConfigToFs()
 {
-    File _file = SPIFFS.open(_configFilePath, "w");
+    File _file = _fs.open(_configFilePath, "w");
     if (!_file)
     {
-        error("Failed to open config file for writing", "AdvancedLogger::_saveConfigToSpiffs");
+        error("Failed to open config file for writing", "AdvancedLogger::_saveConfigToFs");
         return;
     }
 
@@ -208,7 +211,7 @@ void AdvancedLogger::_saveConfigToSpiffs()
     _file.println(String("saveLevel=") + String(_saveLevel));
     _file.println(String("maxLogLines=") + String(_maxLogLines));
     _file.close();
-    debug("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToSpiffs");
+    debug("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToFs");
 }
 
 void AdvancedLogger::setMaxLogLines(int maxLines)
@@ -217,12 +220,12 @@ void AdvancedLogger::setMaxLogLines(int maxLines)
         ("Setting max log lines to " + String(maxLines)).c_str(),
         "AdvancedLogger::setMaxLogLines");
     _maxLogLines = maxLines;
-    _saveConfigToSpiffs();
+    _saveConfigToFs();
 }
 
 int AdvancedLogger::getLogLines()
 {
-    File _file = SPIFFS.open(_logFilePath, "r");
+    File _file = _fs.open(_logFilePath, "r");
     if (!_file)
     {
         error("Failed to open log file", "AdvancedLogger::getLogLines", true);
@@ -244,20 +247,20 @@ int AdvancedLogger::getLogLines()
 void AdvancedLogger::clearLog()
 {
     warning("Clearing log", "AdvancedLogger::clearLog", true); // Avoid recursive saving
-    SPIFFS.remove(_logFilePath);
-    File _file = SPIFFS.open(_logFilePath, "w");
+    _fs.remove(_logFilePath);
+    File _file = _fs.open(_logFilePath, "w");
     if (!_file)
     {
         error("Failed to open log file", "AdvancedLogger::clearLog", true); // Avoid recursive saving
         return;
     }
     _file.close();
-    warning("Log cleared", "AdvancedLogger::clearLog", true); // Avoid recursive saving
+    warning("Log cleared", "AdvancedLogger::clearLog");
 }
 
 void AdvancedLogger::_save(const char *messageFormatted)
 {
-    File _file = SPIFFS.open(_logFilePath, "a");
+    File _file = _fs.open(_logFilePath, "a");
     if (_file)
     {
         _file.println(messageFormatted);
@@ -278,7 +281,7 @@ void AdvancedLogger::dumpToSerial()
         Serial.print("_");
     Serial.println();
 
-    File _file = SPIFFS.open(_logFilePath, "r");
+    File _file = _fs.open(_logFilePath, "r");
     if (!_file)
     {
         error("Failed to open log file", "AdvancedLogger::dumpToSerial", true); // Avoid recursive saving
@@ -336,10 +339,10 @@ String AdvancedLogger::_getTimestamp()
 
 bool AdvancedLogger::_isValidPath(const char *path)
 {
-    const char *invalidChars = "<>:\"/\\|?*";
+    const char *invalidChars = "<>:\"\\|?*";
     const char *invalidStartChars = ". ";
     const char *invalidEndChars = " .";
-    const int spiffsMaxPathLength = 31;
+    const int spiffsMaxPathLength = 255;
 
     for (int i = 0; i < strlen(invalidChars); i++)
     {

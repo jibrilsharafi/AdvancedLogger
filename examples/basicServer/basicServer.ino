@@ -38,7 +38,7 @@ String customLogPath = "/customPath/log.txt";
 String customConfigPath = "/customPath/config.txt";
 String customTimestampFormat = "%A %B %Y | %H:%M:%S";
 
-AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str(), customTimestampFormat.c_str()); // Leave empty for default paths
+AdvancedLogger logger(SPIFFS, customLogPath.c_str(), customConfigPath.c_str(), customTimestampFormat.c_str()); // Leave empty for default paths
 
 AsyncWebServer server(80);
 
