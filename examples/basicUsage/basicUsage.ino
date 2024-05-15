@@ -1,5 +1,5 @@
 /*
- * File: basicUsage.cpp
+ * File: basicUsage.ino
  * --------------------
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *

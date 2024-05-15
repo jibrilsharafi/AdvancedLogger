@@ -1,5 +1,5 @@
 /*
- * File: basicServer.cpp
+ * File: basicServer.ino
  * --------------------
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *

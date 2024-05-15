@@ -1,10 +1,10 @@
 # AdvancedLogger
 
 [![Release](https://img.shields.io/github/v/release/jibrilsharafi/AdvancedLogger)](#release)
-
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/jijio/library/AdvancedLogger.svg)](https://registry.platformio.org/libraries/jijio/AdvancedLogger)
-
 [![arduino-library-badge](https://www.ardu-badge.com/badge/AdvancedLogger.svg?)](https://www.ardu-badge.com/AdvancedLogger)
+
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/jibrilsharafi/AdvancedLogger/blob/master/LICENSE)
 
 [![ESP32](https://img.shields.io/badge/ESP-32S3-000000.svg?longCache=true&style=flat&colorA=CC101F)](https://www.espressif.com/en/products/socs/esp32-S3)
 
@@ -27,7 +27,7 @@ Output (both in the Serial and in the log file in memory):
 [2024-03-23 09:44:10] [1450 ms] [INFO] [Core 1] [main::setup] This is an info message!
 [2024-03-23 09:44:12] [3250 ms] [ERROR] [Core 1] [main::loop] This is an error message!!
 ```
-For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.cpp) and [basicServer](examples/basicServer/basicServer.cpp) in the examples folder.
+For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.ino) and [basicServer](examples/basicServer/basicServer.ino) in the examples folder.
 
 ## Why?
 There is no way of sugar-coat it: *every well-developed project will eventually need a proper logging* in place to make sure that not only everything is fully monitored, but also that everything monitored is later accessible for debugging. 
