@@ -43,6 +43,23 @@ constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [T
 #include <Arduino.h>
 #include <FS.h>
 
+#ifdef ESP32
+#define CORE_ID xPortGetCoreID()
+#define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
+#define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
+#define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
+#define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
+#elif defined(ESP8266)
+#define CORE_ID 0
+#ifndef LOG_LEVEL
+#define LOG_LEVEL 3
+#endif
+#define LOG_D(format, ...) if (LOG_LEVEL <= 1) { Serial.printf("[%lu ms] [DEBUG] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
+#define LOG_I(format, ...) if (LOG_LEVEL <= 2) { Serial.printf("[%lu ms] [INFO] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
+#define LOG_W(format, ...) if (LOG_LEVEL <= 3) { Serial.printf("[%lu ms] [WARNING] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
+#define LOG_E(format, ...) if (LOG_LEVEL <= 4) { Serial.printf("[%lu ms] [ERROR] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
+#endif
+
 class AdvancedLogger
 {
 public:
@@ -72,17 +89,17 @@ public:
 
     void setMaxLogLines(int maxLines);
     int getLogLines();
-    void clearLog(const char *reason = "No reason provided");
+    void clearLog();
 
     void dump(Stream& stream);
 
     String logLevelToString(LogLevel logLevel);
 
 private:
-    HardwareSerial &_serial;
-
     bool _filesystemPresent = false;
     FS* _fs = nullptr;
+
+    HardwareSerial &_serial;
 
     String _logFilePath = DEFAULT_LOG_PATH;
     String _configFilePath = DEFAULT_CONFIG_PATH;
@@ -98,7 +115,7 @@ private:
     bool _setConfigFromFs();
     void _saveConfigToFs();
 
-    LogLevel _stringToLogLevel(const String &logLevelStr);
+    LogLevel _charToLogLevel(const char *logLevelStr);
 
     const char *_timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
     String _getTimestamp();

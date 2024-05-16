@@ -25,7 +25,7 @@ AdvancedLogger::AdvancedLogger(
 
     if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
     {
-        log_w(
+        LOG_W(
             "Invalid path for log %s or config file %s, using default paths: %s and %s",
             _logFilePath,
             _configFilePath,
@@ -39,7 +39,7 @@ AdvancedLogger::AdvancedLogger(
 
     if (!_isValidTimestampFormat(_timestampFormat))
     {
-        log_w(
+        LOG_W(
             "Invalid timestamp format %s, using default format: %s",
             _timestampFormat,
             DEFAULT_TIMESTAMP_FORMAT);
@@ -55,7 +55,7 @@ void AdvancedLogger::begin()
 
     if (!_setConfigFromFs())
     {
-        log_w("Failed to set config from filesystem, using default config");
+        LOG_W("Failed to set config from filesystem, using default config");
         setDefaultConfig();
     }
     _logLines = getLogLines();
@@ -83,7 +83,7 @@ void AdvancedLogger::begin()
 
     if (!_filesystemPresent)
     {
-        log_w("File system not passed to constructor, logging to file disabled");
+        LOG_W("File system not passed to constructor, logging to file disabled");
         warning("Logging to file disabled as file system not passed to constructor", "AdvancedLogger::begin");
     }
 
@@ -124,7 +124,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
 {
     if (static_cast<int>(logLevel) < static_cast<int>(_printLevel) && (printOnly || static_cast<int>(logLevel) < static_cast<int>(_saveLevel)))
     {
-        log_d("Message not logged due to log level too low");
+        LOG_D("Message not logged due to log level too low");
         return;
     }
 
@@ -137,19 +137,19 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
         _getTimestamp().c_str(),
         millis(),
         logLevelToString(logLevel).c_str(),
-        xPortGetCoreID(),
+        CORE_ID,
         function,
         message);
 
     _serial.println(_message_formatted);
 
-    if (!printOnly && logLevel >= _saveLevel && _filesystemPresent)
+    if (!printOnly && _filesystemPresent && logLevel >= _saveLevel)
     {
         _save(_message_formatted);
         if (_logLines >= _maxLogLines)
         {
             _logLines = 0;
-            clearLog(("Max log lines reached (" + String(_maxLogLines) + ")").c_str());
+            clearLog();
         }
     }
 }
@@ -197,7 +197,7 @@ bool AdvancedLogger::_setConfigFromFs()
 {
     if (!_filesystemPresent)
     {
-        log_d("Skipping file system as it has not been passed to the constructor");
+        LOG_D("Skipping file system as it has not been passed to the constructor");
         return false;
     }
 
@@ -206,7 +206,7 @@ bool AdvancedLogger::_setConfigFromFs()
     File _file = _fs->open(_configFilePath, "r");
     if (!_file)
     {
-        log_e("Failed to open config file for reading");
+        LOG_E("Failed to open config file for reading");
         error("Failed to open config file for reading", "AdvancedLogger::_setConfigFromFs");
         return false;
     }
@@ -220,11 +220,11 @@ bool AdvancedLogger::_setConfigFromFs()
 
         if (key == "printLevel")
         {
-            setPrintLevel(_stringToLogLevel(value));
+            setPrintLevel(_charToLogLevel(value.c_str()));
         }
         else if (key == "saveLevel")
         {
-            setSaveLevel(_stringToLogLevel(value));
+            setSaveLevel(_charToLogLevel(value.c_str()));
         }
         else if (key == "maxLogLines")
         {
@@ -242,7 +242,7 @@ void AdvancedLogger::_saveConfigToFs()
 {
     if (!_filesystemPresent)
     {
-        log_d("Skipping file system as it has not been passed to the constructor");
+        LOG_D("Skipping file system as it has not been passed to the constructor");
         return;
     }
 
@@ -251,7 +251,7 @@ void AdvancedLogger::_saveConfigToFs()
     File _file = _fs->open(_configFilePath, "w");
     if (!_file)
     {
-        // log_e("Failed to open config file for reading");
+        LOG_E("Failed to open config file for reading");
         error("Failed to open config file for writing", "AdvancedLogger::_saveConfigToFs");
         return;
     }
@@ -277,14 +277,14 @@ int AdvancedLogger::getLogLines()
 {
     if (!_filesystemPresent)
     {
-        log_d("Skipping file system as it has not been passed to the constructor");
+        LOG_D("Skipping file system as it has not been passed to the constructor");
         return 0;
     }
 
     File _file = _fs->open(_logFilePath, "r");
     if (!_file)
     {
-        log_e("Failed to open config file for reading");
+        LOG_E("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::getLogLines", true);
         return 0;
     }
@@ -301,41 +301,37 @@ int AdvancedLogger::getLogLines()
     return lines;
 }
 
-void AdvancedLogger::clearLog(const char *reason)
+void AdvancedLogger::clearLog()
 {
     if (!_filesystemPresent)
     {
-        log_d("Skipping file system as it has not been passed to the constructor");
+        LOG_D("Skipping file system as it has not been passed to the constructor");
         return;
     }
 
-    debug("Clearing log...", "AdvancedLogger::clearLog", true); // Avoid recursive saving
-    _fs->remove(_logFilePath);
     File _file = _fs->open(_logFilePath, "w");
     if (!_file)
     {
-        log_e("Failed to open config file for reading");
+        LOG_E("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::clearLog", true); // Avoid recursive saving
         return;
     }
+    _file.print("");
     _file.close();
-    warning(
-        ("Log cleared: " + String(reason)).c_str(),
-        "AdvancedLogger::clearLog");
 }
 
 void AdvancedLogger::_save(const char *messageFormatted)
 {
     if (!_filesystemPresent)
     {
-        log_d("Skipping file system as it has not been passed to the constructor");
+        LOG_D("Skipping file system as it has not been passed to the constructor");
         return;
     }
 
     File _file = _fs->open(_logFilePath, "a");
     if (!_file)
     {
-        log_e("Failed to open config file for reading");
+        LOG_E("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::_save", true); // Avoid recursive saving
         return;
     }
@@ -354,7 +350,7 @@ void AdvancedLogger::dump(Stream &stream)
     File _file = _fs->open(_logFilePath, "r");
     if (!_file)
     {
-        // log_e("Failed to open config file for reading");
+        LOG_E("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::dump", true); // Avoid recursive saving
         return;
     }
@@ -384,25 +380,28 @@ String AdvancedLogger::logLevelToString(LogLevel logLevel)
     case LogLevel::FATAL:
         return String("FATAL");
     default:
-        log_w("Unknown log level %d", static_cast<int>(logLevel));
+        LOG_W("Unknown log level %d", static_cast<int>(logLevel));
         return String("UNKNOWN");
     }
 }
 
-LogLevel AdvancedLogger::_stringToLogLevel(const String &logLevelStr)
+LogLevel AdvancedLogger::_charToLogLevel(const char *logLevelChar)
 {
-    if (logLevelStr == "DEBUG")
+    if (strcmp(logLevelChar, "DEBUG") == 0)
         return LogLevel::DEBUG;
-    else if (logLevelStr == "INFO")
+    else if (strcmp(logLevelChar, "INFO") == 0)
         return LogLevel::INFO;
-    else if (logLevelStr == "WARNING")
+    else if (strcmp(logLevelChar, "WARNING") == 0)
         return LogLevel::WARNING;
-    else if (logLevelStr == "ERROR")
+    else if (strcmp(logLevelChar, "ERROR") == 0)
         return LogLevel::ERROR;
-    else if (logLevelStr == "FATAL")
+    else if (strcmp(logLevelChar, "FATAL") == 0)
         return LogLevel::FATAL;
     else
-        // log_w("Unknown log level %s, using default log level %s", logLevelStr, logLevelToString(DEFAULT_PRINT_LEVEL));
+        LOG_W(
+            "Unknown log level %s, using default log level %s", 
+            logLevelChar, 
+            logLevelToString(DEFAULT_PRINT_LEVEL).c_str());
     return DEFAULT_PRINT_LEVEL;
 }
 
@@ -423,7 +422,7 @@ bool AdvancedLogger::_isValidPath(const char *path)
     const char *invalidEndChars = " .";
     const int filesystemMaxPathLength = 255;
 
-    for (int i = 0; i < strlen(invalidChars); i++)
+    for (size_t i = 0; i < strlen(invalidChars); i++)
     {
         if (strchr(path, invalidChars[i]) != nullptr)
         {
@@ -431,7 +430,7 @@ bool AdvancedLogger::_isValidPath(const char *path)
         }
     }
 
-    for (int i = 0; i < strlen(invalidStartChars); i++)
+    for (size_t i = 0; i < strlen(invalidStartChars); i++)
     {
         if (path[0] == invalidStartChars[i])
         {
@@ -439,7 +438,7 @@ bool AdvancedLogger::_isValidPath(const char *path)
         }
     }
 
-    for (int i = 0; i < strlen(invalidEndChars); i++)
+    for (size_t i = 0; i < strlen(invalidEndChars); i++)
     {
         if (path[strlen(path) - 1] == invalidEndChars[i])
         {
