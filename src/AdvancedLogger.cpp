@@ -4,6 +4,8 @@
 // TODO: add wishlist with new changes done (look at commits)
 // TODO: implement better way to write messages (with %s, %d, etc)
 // TODO: make the FS optional
+// TODO: allow for adding a custom Serial object
+// TODO: Implement a buffer
 
 AdvancedLogger::AdvancedLogger(
     FS &fs,
@@ -49,10 +51,11 @@ AdvancedLogger::AdvancedLogger(
 
 void AdvancedLogger::begin()
 {
-    debug("Initializing AdvancedLogger...", "AdvancedLogger::begin");
+    debug("AdvancedLogger initializing...", "AdvancedLogger::begin");
 
     if (!_setConfigFromFs())
     {
+        log_w("Failed to set log levels from SPIFFS, using default log levels");
         setDefaultLogLevels();
     }
     _logLines = getLogLines();
@@ -81,36 +84,42 @@ void AdvancedLogger::begin()
     debug("AdvancedLogger initialized", "AdvancedLogger::begin");
 }
 
-void AdvancedLogger::debug(const char *message, const char *function, bool logOnly)
+void AdvancedLogger::verbose(const char *message, const char *function, bool printOnly)
 {
-    _log(message, function, LogLevel::DEBUG, logOnly);
+    _log(message, function, LogLevel::VERBOSE, printOnly);
 }
 
-void AdvancedLogger::info(const char *message, const char *function, bool logOnly)
+void AdvancedLogger::debug(const char *message, const char *function, bool printOnly)
 {
-    _log(message, function, LogLevel::INFO, logOnly);
+    _log(message, function, LogLevel::DEBUG, printOnly);
 }
 
-void AdvancedLogger::warning(const char *message, const char *function, bool logOnly)
+void AdvancedLogger::info(const char *message, const char *function, bool printOnly)
 {
-    _log(message, function, LogLevel::WARNING, logOnly);
+    _log(message, function, LogLevel::INFO, printOnly);
 }
 
-void AdvancedLogger::error(const char *message, const char *function, bool logOnly)
+void AdvancedLogger::warning(const char *message, const char *function, bool printOnly)
 {
-    _log(message, function, LogLevel::ERROR, logOnly);
+    _log(message, function, LogLevel::WARNING, printOnly);
 }
 
-void AdvancedLogger::fatal(const char *message, const char *function, bool logOnly)
+void AdvancedLogger::error(const char *message, const char *function, bool printOnly)
 {
-    _log(message, function, LogLevel::FATAL, logOnly);
+    _log(message, function, LogLevel::ERROR, printOnly);
 }
 
-void AdvancedLogger::_log(const char *message, const char *function, LogLevel logLevel, bool logOnly)
+void AdvancedLogger::fatal(const char *message, const char *function, bool printOnly)
+{
+    _log(message, function, LogLevel::FATAL, printOnly);
+}
+
+void AdvancedLogger::_log(const char *message, const char *function, LogLevel logLevel, bool printOnly)
 {
     logLevel = _saturateLogLevel(logLevel);
-    if (static_cast<int>(logLevel) < static_cast<int>(_printLevel) && (logOnly || static_cast<int>(logLevel) < static_cast<int>(_saveLevel)))
+    if (static_cast<int>(logLevel) < static_cast<int>(_printLevel) && (printOnly || static_cast<int>(logLevel) < static_cast<int>(_saveLevel)))
     {
+        log_d("Message not logged due to log level too low");
         return;
     }
 
@@ -129,7 +138,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
 
     Serial.println(_message_formatted);
 
-    if (!logOnly && logLevel >= _saveLevel)
+    if (!printOnly && logLevel >= _saveLevel)
     {
         _save(_message_formatted);
         if (_logLines >= _maxLogLines)
@@ -137,8 +146,8 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
             _logLines = 0;
             clearLog();
             warning(
-                ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
-                "AdvancedLogger::log");
+                ("Log cleared due to max log lines reached (" + String(_maxLogLines) + ")").c_str(),
+                "AdvancedLogger::_log");
         }
     }
 }
@@ -173,8 +182,8 @@ String AdvancedLogger::getSaveLevel()
 
 void AdvancedLogger::setDefaultLogLevels()
 {
-    setPrintLevel(LogLevel::DEBUG);
-    setSaveLevel(LogLevel::INFO);
+    setPrintLevel(DEFAULT_PRINT_LEVEL);
+    setSaveLevel(DEFAULT_SAVE_LEVEL);
     setMaxLogLines(DEFAULT_MAX_LOG_LINES);
 
     info("Log levels set to default", "AdvancedLogger::setDefaultLogLevels");
@@ -185,6 +194,7 @@ bool AdvancedLogger::_setConfigFromFs()
     File _file = _fs.open(_configFilePath, "r");
     if (!_file)
     {
+        log_e("Failed to open config file for reading");
         error("Failed to open config file for reading", "AdvancedLogger::_setConfigFromFs");
         return false;
     }
@@ -220,6 +230,7 @@ void AdvancedLogger::_saveConfigToFs()
     File _file = _fs.open(_configFilePath, "w");
     if (!_file)
     {
+        log_e("Failed to open config file for reading");
         error("Failed to open config file for writing", "AdvancedLogger::_saveConfigToFs");
         return;
     }
@@ -245,6 +256,7 @@ int AdvancedLogger::getLogLines()
     File _file = _fs.open(_logFilePath, "r");
     if (!_file)
     {
+        log_e("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::getLogLines", true);
         return -1;
     }
@@ -268,6 +280,7 @@ void AdvancedLogger::clearLog()
     File _file = _fs.open(_logFilePath, "w");
     if (!_file)
     {
+        log_e("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::clearLog", true); // Avoid recursive saving
         return;
     }
@@ -278,15 +291,17 @@ void AdvancedLogger::clearLog()
 void AdvancedLogger::_save(const char *messageFormatted)
 {
     File _file = _fs.open(_logFilePath, "a");
-    if (_file)
+    if (!_file)
+    {
+        log_e("Failed to open config file for reading");
+        error("Failed to open log file", "AdvancedLogger::_save", true); // Avoid recursive saving
+        return;
+    }
+    else
     {
         _file.println(messageFormatted);
         _file.close();
         _logLines++;
-    }
-    else
-    {
-        error("Failed to open log file", "AdvancedLogger::_save", true); // Avoid recursive saving
     }
 }
 
@@ -301,6 +316,7 @@ void AdvancedLogger::dumpToSerial()
     File _file = _fs.open(_logFilePath, "r");
     if (!_file)
     {
+        log_e("Failed to open config file for reading");
         error("Failed to open log file", "AdvancedLogger::dumpToSerial", true); // Avoid recursive saving
         return;
     }
@@ -333,6 +349,7 @@ String AdvancedLogger::_logLevelToString(LogLevel logLevel)
     case LogLevel::FATAL:
         return "FATAL";
     default:
+        log_w("Unknown log level %d", static_cast<int>(logLevel));
         return "UNKNOWN";
     }
 }
@@ -350,12 +367,18 @@ LogLevel AdvancedLogger::_stringToLogLevel(const String &logLevelStr)
     else if (logLevelStr == "FATAL")
         return LogLevel::FATAL;
     else
-        return LogLevel::INFO; // default value
+        log_w("Unknown log level %s, using default log level %s", logLevelStr, _logLevelToString(DEFAULT_PRINT_LEVEL));
+    return DEFAULT_PRINT_LEVEL;
 }
 
 LogLevel AdvancedLogger::_saturateLogLevel(LogLevel logLevel)
 {
-    return static_cast<LogLevel>(max(min(static_cast<int>(logLevel), static_cast<int>(LogLevel::FATAL)), static_cast<int>(LogLevel::DEBUG)));
+    return static_cast<LogLevel>(
+        max(
+            min(
+                static_cast<int>(logLevel),
+                static_cast<int>(LogLevel::FATAL)),
+            static_cast<int>(LogLevel::DEBUG)));
 }
 
 String AdvancedLogger::_getTimestamp()

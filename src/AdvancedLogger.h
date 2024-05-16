@@ -20,18 +20,6 @@
 #ifndef ADVANCEDLOGGER_H
 #define ADVANCEDLOGGER_H
 
-constexpr int DEFAULT_MAX_LOG_LINES = 1000;
-
-constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
-constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
-
-constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
-
-constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
-
-#include <Arduino.h>
-#include <FS.h>
-
 enum class LogLevel : int {
     VERBOSE = 0,
     DEBUG = 1,
@@ -40,6 +28,20 @@ enum class LogLevel : int {
     ERROR = 4,
     FATAL = 5
 };
+
+constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
+constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
+constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
+constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
+
+constexpr int DEFAULT_MAX_LOG_LINES = 1000;
+
+constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
+
+constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
+
+#include <Arduino.h>
+#include <FS.h>
 
 class AdvancedLogger
 {
@@ -57,8 +59,8 @@ public:
      */
     AdvancedLogger(
         FS &fs,
-        LogLevel printLevel = LogLevel::DEBUG,
-        LogLevel saveLevel = LogLevel::INFO,
+        LogLevel printLevel = DEFAULT_PRINT_LEVEL,
+        LogLevel saveLevel = DEFAULT_SAVE_LEVEL,
         int maxLogLines = DEFAULT_MAX_LOG_LINES,
         const char *logFilePath = DEFAULT_LOG_PATH,
         const char *configFilePath = DEFAULT_CONFIG_PATH,
@@ -66,11 +68,12 @@ public:
 
     void begin();
 
-    void debug(const char *message, const char *function, bool logOnly = false);
-    void info(const char *message, const char *function, bool logOnly = false);
-    void warning(const char *message, const char *function, bool logOnly = false);
-    void error(const char *message, const char *function, bool logOnly = false);
-    void fatal(const char *message, const char *function, bool logOnly = false);
+    void verbose(const char *message, const char *function, bool printOnly = false);
+    void debug(const char *message, const char *function, bool printOnly = false);
+    void info(const char *message, const char *function, bool printOnly = false);
+    void warning(const char *message, const char *function, bool printOnly = false);
+    void error(const char *message, const char *function, bool printOnly = false);
+    void fatal(const char *message, const char *function, bool printOnly = false);
 
     void setPrintLevel(LogLevel logLevel);
     void setSaveLevel(LogLevel logLevel);
@@ -98,7 +101,7 @@ private:
     int _maxLogLines;
     int _logLines = 0;
 
-    void _log(const char *message, const char *function, LogLevel logLevel, bool logOnly = false);
+    void _log(const char *message, const char *function, LogLevel logLevel, bool printOnly = false);
     void _save(const char *messageFormatted);
     bool _setConfigFromFs();
     void _saveConfigToFs();

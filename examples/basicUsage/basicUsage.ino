@@ -85,7 +85,7 @@ void loop()
     delay(500);
     logger.fatal("This is a fatal message!!!!!", "basicServer::loop");
     delay(500);
-    logger.info("This is an info message (logOnly)!!", "basicServer::loop", true);
+    logger.info("This is an info message (printOnly)!!", "basicServer::loop", true);
     delay(1000);
 
     printLevel = logger.getPrintLevel();

@@ -10,8 +10,12 @@ AdvancedLogger  KEYWORD1
 ####################################################################################################
 # AdvancedLogger functions and methods
 ####################################################################################################
-log             KEYWORD2
-logOnly         KEYWORD2
+verbose         KEYWORD2
+debug           KEYWORD2
+info            KEYWORD2
+warning         KEYWORD2
+error           KEYWORD2
+fatal           KEYWORD2
 setPrintLevel   KEYWORD2
 setSaveLevel    KEYWORD2
 getPrintLevel   KEYWORD2
@@ -25,16 +29,9 @@ dumpToSerial    KEYWORD2
 ####################################################################################################
 # AdvancedLogger constants
 ####################################################################################################
-ADVANCEDLOGGER_VERBOSE LITERAL1
-ADVANCEDLOGGER_DEBUG   LITERAL1
-ADVANCEDLOGGER_INFO    LITERAL1
-ADVANCEDLOGGER_WARNING LITERAL1
-ADVANCEDLOGGER_ERROR   LITERAL1
-ADVANCEDLOGGER_FATAL   LITERAL1
-ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL LITERAL1
-ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL  LITERAL1
-ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES LITERAL1
-ADVANCEDLOGGER_TIMESTAMP_FORMAT LITERAL1
-ADVANCEDLOGGER_FORMAT LITERAL1
-ADVANCEDLOGGER_LOG_PATH LITERAL1
-ADVANCEDLOGGER_CONFIG_PATH LITERAL1
+LogLevel::VERBOSE KEYWORD3
+LogLevel::DEBUG   KEYWORD3
+LogLevel::INFO    KEYWORD3
+LogLevel::WARNING KEYWORD3
+LogLevel::ERROR   KEYWORD3
+LogLevel::FATAL   KEYWORD3
