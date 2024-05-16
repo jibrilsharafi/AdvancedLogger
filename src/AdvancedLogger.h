@@ -29,8 +29,8 @@ enum class LogLevel : int {
     FATAL = 5
 };
 
-constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
-constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
+constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::INFO;
+constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::WARNING;
 constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
 constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
 
@@ -46,19 +46,9 @@ constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [T
 class AdvancedLogger
 {
 public:
-    /**
-     * Constructs a new AdvancedLogger.
-     *
-     * @param fs The file system to use.
-     * @param printLevel The minimum log level to print. Should be a value from the LogLevel enum class.
-     * @param saveLevel The minimum log level to save. Should be a value from the LogLevel enum class.
-     * @param maxLogLines The maximum number of log lines to save.
-     * @param logFilePath The path to the log file.
-     * @param configFilePath The path to the config file.
-     * @param timestampFormat The format to use for timestamps.
-     */
     AdvancedLogger(
         FS* fs = nullptr,
+        HardwareSerial &_serial = Serial,
         const char *logFilePath = DEFAULT_LOG_PATH,
         const char *configFilePath = DEFAULT_CONFIG_PATH,
         const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
@@ -82,12 +72,14 @@ public:
 
     void setMaxLogLines(int maxLines);
     int getLogLines();
-    void clearLog();
+    void clearLog(const char *reason = "No reason provided");
 
     void dumpToSerial();
 
 private:
-    bool _shouldLogToFile = false;
+    HardwareSerial &_serial;
+
+    bool _filesystemPresent = false;
     FS* _fs = nullptr;
 
     String _logFilePath = DEFAULT_LOG_PATH;
@@ -106,7 +98,6 @@ private:
 
     String _logLevelToString(LogLevel logLevel);
     LogLevel _stringToLogLevel(const String &logLevelStr);
-    LogLevel _saturateLogLevel(LogLevel logLevel);
 
     const char *_timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
     String _getTimestamp();
