@@ -127,7 +127,7 @@ void loop()
 
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
-        logger.dumpToSerial();
+        logger.dump();
 
         lastMillisLogDump = millis();
     }

@@ -55,18 +55,18 @@ public:
 
     void begin();
 
-    void verbose(const char *message, const char *function, bool printOnly = false);
-    void debug(const char *message, const char *function, bool printOnly = false);
-    void info(const char *message, const char *function, bool printOnly = false);
-    void warning(const char *message, const char *function, bool printOnly = false);
-    void error(const char *message, const char *function, bool printOnly = false);
-    void fatal(const char *message, const char *function, bool printOnly = false);
+    void verbose(const char *message, const char *function = "untracked", bool printOnly = false);
+    void debug(const char *message, const char *function = "untracked", bool printOnly = false);
+    void info(const char *message, const char *function = "untracked", bool printOnly = false);
+    void warning(const char *message, const char *function = "untracked", bool printOnly = false);
+    void error(const char *message, const char *function = "untracked", bool printOnly = false);
+    void fatal(const char *message, const char *function = "untracked", bool printOnly = false);
 
     void setPrintLevel(LogLevel logLevel);
     void setSaveLevel(LogLevel logLevel);
 
-    String getPrintLevel();
-    String getSaveLevel();
+    LogLevel getPrintLevel();
+    LogLevel getSaveLevel();
 
     void setDefaultConfig();
 
@@ -74,7 +74,9 @@ public:
     int getLogLines();
     void clearLog(const char *reason = "No reason provided");
 
-    void dumpToSerial();
+    void dump(Stream& stream);
+
+    String logLevelToString(LogLevel logLevel);
 
 private:
     HardwareSerial &_serial;
@@ -96,7 +98,6 @@ private:
     bool _setConfigFromFs();
     void _saveConfigToFs();
 
-    String _logLevelToString(LogLevel logLevel);
     LogLevel _stringToLogLevel(const String &logLevelStr);
 
     const char *_timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
