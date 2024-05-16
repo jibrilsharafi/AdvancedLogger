@@ -139,7 +139,7 @@ void loop()
             "basicServer::loop"
         );
         logger.clearLog();
-        logger.setDefaultLogLevels();
+        logger.setDefaultConfig();
         logger.warning("Log cleared!", "basicServer::loop");
 
         lastMillisLogClear = millis();

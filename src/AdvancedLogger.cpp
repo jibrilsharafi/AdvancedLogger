@@ -1,28 +1,28 @@
 #include "AdvancedLogger.h"
 
-// TODO: Write the documentation for all the functions and report in README.md
+// TODO: Write the documentation for all the functions (say what is optional and what not) and report in README.md
 // TODO: add wishlist with new changes done (look at commits)
 // TODO: implement better way to write messages (with %s, %d, etc)
 // TODO: make the FS optional
 // TODO: allow for adding a custom Serial object
 // TODO: Implement a buffer
+// TODO: Dump to any serial or any file
 
 AdvancedLogger::AdvancedLogger(
-    FS &fs,
-    LogLevel printLevel,
-    LogLevel saveLevel,
-    int maxLogLines,
+    FS* fs,
     const char *logFilePath,
     const char *configFilePath,
     const char *timestampFormat)
-    : _fs(fs),
-      _printLevel(printLevel),
-      _saveLevel(saveLevel),
-      _maxLogLines(maxLogLines),
-      _logFilePath(logFilePath),
+    : _logFilePath(logFilePath),
       _configFilePath(configFilePath),
       _timestampFormat(timestampFormat)
 {
+    if (fs != nullptr)
+    {
+        _fs = fs;
+        _shouldLogToFile = true;
+    }
+
     if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
     {
         log_w(
@@ -55,8 +55,8 @@ void AdvancedLogger::begin()
 
     if (!_setConfigFromFs())
     {
-        log_w("Failed to set log levels from SPIFFS, using default log levels");
-        setDefaultLogLevels();
+        log_w("Failed to set config from filesystem, using default config");
+        setDefaultConfig();
     }
     _logLines = getLogLines();
 
@@ -79,6 +79,12 @@ void AdvancedLogger::begin()
                 String(DEFAULT_TIMESTAMP_FORMAT))
                 .c_str(),
             "AdvancedLogger::begin");
+    }
+
+    if (!_shouldLogToFile)
+    {
+        log_w("File system not passed to constructor, logging to file disabled");
+        warning("Logging to file disabled as file system not passed to constructor", "AdvancedLogger::begin");
     }
 
     debug("AdvancedLogger initialized", "AdvancedLogger::begin");
@@ -123,7 +129,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
         return;
     }
 
-    char _message_formatted[26 + strlen(message) + strlen(function) + 70]; // 26 = length of timestamp, 70 = length of log level
+    char _message_formatted[1024]; // 1024 is a safe value
 
     snprintf(
         _message_formatted,
@@ -138,7 +144,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
 
     Serial.println(_message_formatted);
 
-    if (!printOnly && logLevel >= _saveLevel)
+    if (!printOnly && logLevel >= _saveLevel && _shouldLogToFile)
     {
         _save(_message_formatted);
         if (_logLines >= _maxLogLines)
@@ -180,18 +186,23 @@ String AdvancedLogger::getSaveLevel()
     return _logLevelToString(_saveLevel);
 }
 
-void AdvancedLogger::setDefaultLogLevels()
+void AdvancedLogger::setDefaultConfig()
 {
     setPrintLevel(DEFAULT_PRINT_LEVEL);
     setSaveLevel(DEFAULT_SAVE_LEVEL);
     setMaxLogLines(DEFAULT_MAX_LOG_LINES);
 
-    info("Log levels set to default", "AdvancedLogger::setDefaultLogLevels");
+    info("Config set to default", "AdvancedLogger::setDefaultConfig");
 }
 
 bool AdvancedLogger::_setConfigFromFs()
 {
-    File _file = _fs.open(_configFilePath, "r");
+    if (!_shouldLogToFile) {
+        log_d("Skipping file system as it has not been passed to the constructor");
+        return false;
+    }
+
+    File _file = _fs->open(_configFilePath, "r");
     if (!_file)
     {
         log_e("Failed to open config file for reading");
@@ -221,13 +232,18 @@ bool AdvancedLogger::_setConfigFromFs()
     }
 
     _file.close();
-    debug("Log levels set from SPIFFS", "AdvancedLogger::_setConfigFromFs");
+    debug("Config set from filesystem", "AdvancedLogger::_setConfigFromFs");
     return true;
 }
 
 void AdvancedLogger::_saveConfigToFs()
 {
-    File _file = _fs.open(_configFilePath, "w");
+    if (!_shouldLogToFile) {
+        log_d("Skipping file system as it has not been passed to the constructor");
+        return;
+    }
+
+    File _file = _fs->open(_configFilePath, "w");
     if (!_file)
     {
         log_e("Failed to open config file for reading");
@@ -239,7 +255,7 @@ void AdvancedLogger::_saveConfigToFs()
     _file.println(String("saveLevel=") + _logLevelToString(_saveLevel));
     _file.println(String("maxLogLines=") + String(_maxLogLines));
     _file.close();
-    debug("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToFs");
+    debug("Config saved to filesystem", "AdvancedLogger::_saveConfigToFs");
 }
 
 void AdvancedLogger::setMaxLogLines(int maxLines)
@@ -253,7 +269,12 @@ void AdvancedLogger::setMaxLogLines(int maxLines)
 
 int AdvancedLogger::getLogLines()
 {
-    File _file = _fs.open(_logFilePath, "r");
+    if (!_shouldLogToFile) {
+        log_d("Skipping file system as it has not been passed to the constructor");
+        return -1;
+    }
+
+    File _file = _fs->open(_logFilePath, "r");
     if (!_file)
     {
         log_e("Failed to open config file for reading");
@@ -275,9 +296,14 @@ int AdvancedLogger::getLogLines()
 
 void AdvancedLogger::clearLog()
 {
+    if (!_shouldLogToFile) {
+        log_d("Skipping file system as it has not been passed to the constructor");
+        return;
+    }
+
     warning("Clearing log", "AdvancedLogger::clearLog", true); // Avoid recursive saving
-    _fs.remove(_logFilePath);
-    File _file = _fs.open(_logFilePath, "w");
+    _fs->remove(_logFilePath);
+    File _file = _fs->open(_logFilePath, "w");
     if (!_file)
     {
         log_e("Failed to open config file for reading");
@@ -290,7 +316,12 @@ void AdvancedLogger::clearLog()
 
 void AdvancedLogger::_save(const char *messageFormatted)
 {
-    File _file = _fs.open(_logFilePath, "a");
+    if (!_shouldLogToFile) {
+        log_d("Skipping file system as it has not been passed to the constructor");
+        return;
+    }
+
+    File _file = _fs->open(_logFilePath, "a");
     if (!_file)
     {
         log_e("Failed to open config file for reading");
@@ -307,13 +338,18 @@ void AdvancedLogger::_save(const char *messageFormatted)
 
 void AdvancedLogger::dumpToSerial()
 {
+    if (!_shouldLogToFile) {
+        log_d("Skipping file system as it has not been passed to the constructor");
+        return;
+    }
+
     info("Dumping log to Serial", "AdvancedLogger::dumpToSerial", true);
 
     for (int i = 0; i < 2 * 50; i++)
         Serial.print("_");
     Serial.println();
 
-    File _file = _fs.open(_logFilePath, "r");
+    File _file = _fs->open(_logFilePath, "r");
     if (!_file)
     {
         log_e("Failed to open config file for reading");
@@ -396,7 +432,7 @@ bool AdvancedLogger::_isValidPath(const char *path)
     const char *invalidChars = "<>:\"\\|?*";
     const char *invalidStartChars = ". ";
     const char *invalidEndChars = " .";
-    const int spiffsMaxPathLength = 255;
+    const int filesystemMaxPathLength = 255;
 
     for (int i = 0; i < strlen(invalidChars); i++)
     {
@@ -422,7 +458,7 @@ bool AdvancedLogger::_isValidPath(const char *path)
         }
     }
 
-    if (strlen(path) > spiffsMaxPathLength)
+    if (strlen(path) > filesystemMaxPathLength)
     {
         return false;
     }

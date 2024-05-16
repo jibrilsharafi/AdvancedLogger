@@ -12,7 +12,7 @@
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
  * This library provides advanced logging for the ESP32.
- * It allows you to log messages to the console and to a file on the SPIFFS.
+ * It allows you to log messages to the console and to a file on the filesystem.
  * You can set the print level and save level, and the library will only log
  * messages accordingly.
  */
@@ -58,10 +58,7 @@ public:
      * @param timestampFormat The format to use for timestamps.
      */
     AdvancedLogger(
-        FS &fs,
-        LogLevel printLevel = DEFAULT_PRINT_LEVEL,
-        LogLevel saveLevel = DEFAULT_SAVE_LEVEL,
-        int maxLogLines = DEFAULT_MAX_LOG_LINES,
+        FS* fs = nullptr,
         const char *logFilePath = DEFAULT_LOG_PATH,
         const char *configFilePath = DEFAULT_CONFIG_PATH,
         const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
@@ -81,7 +78,7 @@ public:
     String getPrintLevel();
     String getSaveLevel();
 
-    void setDefaultLogLevels();
+    void setDefaultConfig();
 
     void setMaxLogLines(int maxLines);
     int getLogLines();
@@ -90,15 +87,16 @@ public:
     void dumpToSerial();
 
 private:
-    FS &_fs;
+    bool _shouldLogToFile = false;
+    FS* _fs = nullptr;
 
-    String _logFilePath;
-    String _configFilePath;
+    String _logFilePath = DEFAULT_LOG_PATH;
+    String _configFilePath = DEFAULT_CONFIG_PATH;
 
-    LogLevel _printLevel;
-    LogLevel _saveLevel;
+    LogLevel _printLevel = DEFAULT_PRINT_LEVEL;
+    LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;
 
-    int _maxLogLines;
+    int _maxLogLines = DEFAULT_MAX_LOG_LINES;
     int _logLines = 0;
 
     void _log(const char *message, const char *function, LogLevel logLevel, bool printOnly = false);
@@ -110,7 +108,7 @@ private:
     LogLevel _stringToLogLevel(const String &logLevelStr);
     LogLevel _saturateLogLevel(LogLevel logLevel);
 
-    const char *_timestampFormat;
+    const char *_timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
     String _getTimestamp();
     
     bool _invalidPath = false;
