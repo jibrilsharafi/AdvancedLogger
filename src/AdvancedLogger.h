@@ -41,15 +41,18 @@ constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
 constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
 #include <Arduino.h>
-#include <FS.h>
 
 #ifdef ESP32
+#include <SPIFFS.h>
+#define Filesystem SPIFFS
 #define CORE_ID xPortGetCoreID()
 #define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
 #define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
 #define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
 #define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
 #elif defined(ESP8266)
+#include <LittleFS.h>
+#define Filesystem LittleFS
 #define CORE_ID 0
 #ifndef LOG_LEVEL
 #define LOG_LEVEL 3
@@ -64,8 +67,6 @@ class AdvancedLogger
 {
 public:
     AdvancedLogger(
-        FS* fs = nullptr,
-        HardwareSerial &_serial = Serial,
         const char *logFilePath = DEFAULT_LOG_PATH,
         const char *configFilePath = DEFAULT_CONFIG_PATH,
         const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
@@ -87,20 +88,15 @@ public:
 
     void setDefaultConfig();
 
-    void setMaxLogLines(int maxLines);
+    void setMaxLogLines(int maxLogLines);
     int getLogLines();
     void clearLog();
 
     void dump(Stream& stream);
 
-    String logLevelToString(LogLevel logLevel);
+    String logLevelToString(LogLevel logLevel, bool trim = true);
 
 private:
-    bool _filesystemPresent = false;
-    FS* _fs = nullptr;
-
-    HardwareSerial &_serial;
-
     String _logFilePath = DEFAULT_LOG_PATH;
     String _configFilePath = DEFAULT_CONFIG_PATH;
 
@@ -112,8 +108,8 @@ private:
 
     void _log(const char *message, const char *function, LogLevel logLevel, bool printOnly = false);
     void _save(const char *messageFormatted);
-    bool _setConfigFromFs();
-    void _saveConfigToFs();
+    bool _setConfigFromSpiffs();
+    void _saveConfigToSpiffs();
 
     LogLevel _charToLogLevel(const char *logLevelStr);
 
