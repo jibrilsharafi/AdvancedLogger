@@ -20,6 +20,15 @@
 #ifndef ADVANCEDLOGGER_H
 #define ADVANCEDLOGGER_H
 
+#include <Arduino.h>
+#include <SPIFFS.h>
+
+#define CORE_ID xPortGetCoreID()
+#define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
+#define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
+#define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
+#define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
+
 enum class LogLevel : int {
     VERBOSE = 0,
     DEBUG = 1,
@@ -31,6 +40,9 @@ enum class LogLevel : int {
 
 constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::INFO;
 constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::WARNING;
+
+constexpr int MAX_LOG_LENGTH = 1024;
+
 constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
 constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
 
@@ -38,30 +50,7 @@ constexpr int DEFAULT_MAX_LOG_LINES = 1000;
 
 constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
 
-constexpr const char* LOG_FORMAT = "[%s] [%lu ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
-
-#include <Arduino.h>
-
-#ifdef ESP32
-#include <SPIFFS.h>
-#define Filesystem SPIFFS
-#define CORE_ID xPortGetCoreID()
-#define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
-#define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
-#define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
-#define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
-#elif defined(ESP8266)
-#include <LittleFS.h>
-#define Filesystem LittleFS
-#define CORE_ID 0
-#ifndef LOG_LEVEL
-#define LOG_LEVEL 3
-#endif
-#define LOG_D(format, ...) if (LOG_LEVEL <= 1) { Serial.printf("[%lu ms] [DEBUG] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
-#define LOG_I(format, ...) if (LOG_LEVEL <= 2) { Serial.printf("[%lu ms] [INFO] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
-#define LOG_W(format, ...) if (LOG_LEVEL <= 3) { Serial.printf("[%lu ms] [WARNING] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
-#define LOG_E(format, ...) if (LOG_LEVEL <= 4) { Serial.printf("[%lu ms] [ERROR] [AdvancedLogger] " format, millis(), ##__VA_ARGS__); Serial.println(); }
-#endif
+constexpr const char* LOG_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
 class AdvancedLogger
 {
@@ -73,12 +62,12 @@ public:
 
     void begin();
 
-    void verbose(const char *message, const char *function = "untracked", bool printOnly = false);
-    void debug(const char *message, const char *function = "untracked", bool printOnly = false);
-    void info(const char *message, const char *function = "untracked", bool printOnly = false);
-    void warning(const char *message, const char *function = "untracked", bool printOnly = false);
-    void error(const char *message, const char *function = "untracked", bool printOnly = false);
-    void fatal(const char *message, const char *function = "untracked", bool printOnly = false);
+    void verbose(const char *format, const char *function = "unknown", ...);
+    void debug(const char *format, const char *function = "unknown", ...);
+    void info(const char *format, const char *function = "unknown", ...);
+    void warning(const char *format, const char *function = "unknown", ...);
+    void error(const char *format, const char *function = "unknown", ...);
+    void fatal(const char *format, const char *function = "unknown", ...);
 
     void setPrintLevel(LogLevel logLevel);
     void setSaveLevel(LogLevel logLevel);
@@ -106,7 +95,8 @@ private:
     int _maxLogLines = DEFAULT_MAX_LOG_LINES;
     int _logLines = 0;
 
-    void _log(const char *message, const char *function, LogLevel logLevel, bool printOnly = false);
+    void _log(const char *format, const char *function, LogLevel logLevel);
+    void _logPrint(const char *format, const char *function, LogLevel logLevel, ...);
     void _save(const char *messageFormatted);
     bool _setConfigFromSpiffs();
     void _saveConfigToSpiffs();
@@ -120,6 +110,8 @@ private:
     bool _invalidTimestampFormat = false;
     bool _isValidPath(const char *path);
     bool _isValidTimestampFormat(const char *format);
+
+    std::string _formatMillis(unsigned long millis);
 };
 
 #endif
