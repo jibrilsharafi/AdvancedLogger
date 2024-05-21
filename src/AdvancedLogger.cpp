@@ -2,11 +2,6 @@
 
 // TODO: Write the documentation for all the functions (say what is optional and what not) and report in README.md
 // TODO: add wishlist with new changes done (look at commits)
-// TODO: implement better way to write messages (with %s, %d, etc)
-// TODO: Implement a buffer
-// TODO: update to v1.2.0
-// TODO: add created and last modified in examples
-// TODO: write in next steps support for other boards (esp8266 tried but too many writd errors)
 
 #define PROCESS_ARGS(format, function)                   \
     char _message[MAX_LOG_LENGTH];                       \

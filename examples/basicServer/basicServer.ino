@@ -4,7 +4,8 @@
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 07/04/2024
+ * Created: 21/03/2024
+ * Last modified: 21/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
