@@ -5,45 +5,55 @@
  *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Created: 21/03/2024
- * Last modified: 21/05/2024
+ * Last modified: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
- * The AdvancedLogger library provides advanced logging for the ESP32.
- * It allows you to log messages to the console and to a file on the SPIFFS.
- * You can set the print level and save level, and the library will only log
- * messages accordingly.
- *
- * Possible logging levels:
- * - ADVANCEDLOGGER_VERBOSE
- * - ADVANCEDLOGGER_DEBUG
- * - ADVANCEDLOGGER_INFO
- * - ADVANCEDLOGGER_WARNING
- * - ADVANCEDLOGGER_ERROR
- * - ADVANCEDLOGGER_FATAL
+ * This example covers the basic usage of the AdvancedLogger library:
+ * - Initializing the logger
+ * - Setting the print and save levels
+ * - Setting the maximum number of log lines before the log is cleared
+ * - Logging messages
+ * - Dumping the log
+ * - Clearing the log
+ * - Getting the current print and save levels
+ * - Getting the current number of log lines
+ * - Setting the default configuration
  */
+
 #include <Arduino.h>
 #include <SPIFFS.h>
 
 #include "AdvancedLogger.h"
 
-String customLogPath = "/customPath/log.txt";
-String customConfigPath = "/customPath/config.txt";
-String customTimestampFormat = "%A %B %Y | %H:%M:%S";
+const char *customLogPath = "/customPath/log.txt";
+const char *customConfigPath = "/customPath/config.txt";
+// For more info on formatting, see https://www.cplusplus.com/reference/ctime/strftime/
+const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
 
-AdvancedLogger logger(SPIFFS, customLogPath.c_str(), customConfigPath.c_str(), customTimestampFormat.c_str()); // Leave empty for default paths
+AdvancedLogger logger(
+    customLogPath,
+    customConfigPath,
+    customTimestampFormat);
+// If you don't want to set custom paths and timestamp format, you can 
+// just use the default constructor:
+// AdvancedLogger logger;
 
-String printLevel;
-String saveLevel;
+// Set the custom print and save levels
+LogLevel printLevel = LogLevel::INFO;
+LogLevel saveLevel = LogLevel::WARNING;
 
+// Set the maximum number of log lines before the log is cleared
+int maxLogLines = 100; // Low value for testing purposes
+
+// Variables for logging and clearing the log
 long lastMillisLogDump = 0;
 const long intervalLogDump = 10000;
+const char *logDumpPath = "/logDump.txt";
 
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
-
-int maxLogLines = 10; // Low value for testing purposes
 
 void setup()
 {
@@ -56,57 +66,84 @@ void setup()
         Serial.println("An Error has occurred while mounting SPIFFS");
     }
 
+    // Initialize the logger
     logger.begin();
     
-    // Setting the print and save levels is not mandatory.
-    // If you don't set them, the default levels are first taken
-    // from the SPIFFS file, and if it doesn't exist, the default
-    // levels are used (DEBUG for print and INFO for save).
-    logger.setPrintLevel(ADVANCEDLOGGER_DEBUG);
-    logger.setSaveLevel(ADVANCEDLOGGER_INFO);
-    // Set the maximum number of log lines before the log is cleared
-    // If you don't set this, the default is used
+    // Setting the print and save levels (optional)
+    logger.setPrintLevel(printLevel);
+    logger.setSaveLevel(saveLevel);
+
+    // Set the maximum number of log lines before the log is cleared (optional)
     logger.setMaxLogLines(maxLogLines);
+
     logger.debug("AdvancedLogger setup done!", "basicUsage::setup");
    
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
+
     logger.info("Setup done!", "basicUsage::setup");
 }
 
 void loop()
 {
-    logger.debug("This is a debug message!", "basicServer::loop");
+    logger.verbose("This is a verbose message", "basicUsage::loop");
     delay(500);
-    logger.info("This is an info message!!", "basicServer::loop");
+    logger.debug("This is a debug message!", "basicUsage::loop");
     delay(500);
-    logger.warning("This is a warning message!!!", "basicServer::loop");
+    logger.info("This is an info message!!", "basicUsage::loop");
     delay(500);
-    logger.error("This is a error message!!!!", "basicServer::loop");
+    logger.warning("This is a warning message!!!", "basicUsage::loop");
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", "basicServer::loop");
+    logger.error("This is a error message!!!!", "basicUsage::loop");
     delay(500);
-    logger.info("This is an info message (printOnly)!!", "basicServer::loop", true);
-    delay(1000);
+    logger.fatal("This is a fatal message!!!!!", "basicUsage::loop");
+    delay(500);
 
-    printLevel = logger.getPrintLevel();
-    saveLevel = logger.getSaveLevel();
+    logger.info("Testing printf functionality: %d, %f, %s", "basicUsage::loop", 1, 2.0, "three");
+    delay(500);
+    
+    // Get the current print and save levels
+    String printLevel = logger.logLevelToString(logger.getPrintLevel());
+    String saveLevel = logger.logLevelToString(logger.getSaveLevel());
 
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
-        logger.dump();
+        // Print the current number of log lines
+        logger.info("Current number of log lines: %d", "basicUsage::loop", logger.getLogLines());
+
+        // Dump the log to Serial
+        logger.info("Dumping log to Serial...", "basicUsage::loop");
+        logger.dump(Serial);
+        logger.info("Log dumped!", "basicUsage::loop");
+
+        // Dump the log to another file
+        logger.info("Dumping log to file...", "basicUsage::loop");
+        File tempFile = SPIFFS.open(logDumpPath, "w");
+        logger.dump(tempFile);
+        tempFile.close();
+        logger.info("Log dumped!", "basicUsage::loop");
+
+        // Ensure the log has been dumped correctly
+        logger.info("Printing the temporary log dump file...", "basicUsage::loop");
+        tempFile = SPIFFS.open(logDumpPath, "r");
+        while (tempFile.available())
+        {
+            Serial.write(tempFile.read());
+        }
+        tempFile.close();
+        logger.info("Log dump file printed!", "basicUsage::loop");
 
         lastMillisLogDump = millis();
     }
-    
+
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
-        logger.info(
-            ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
-            "basicServer::loop"
-        );
+        // Clear the log and set the default configuration
         logger.clearLog();
         logger.setDefaultConfig();
-        logger.warning("Log cleared!", "basicServer::loop");
+
+        logger.info("Log cleared and default configuration set!", "basicUsage::loop");
+
+        lastMillisLogClear = millis();
     }
 }

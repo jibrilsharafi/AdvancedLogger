@@ -5,16 +5,14 @@
  * advanced logging for the ESP32.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 12/05/2024
+ * Date: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  * Version: 1.2.0
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
- * This library provides advanced logging for the ESP32.
- * It allows you to log messages to the console and to a file on the filesystem.
- * You can set the print level and save level, and the library will only log
- * messages accordingly.
+ * This library provides advanced logging capabilities for the ESP32, allowing you to log messages
+ * to the console and to a file on the SPIFFS.
  */
 
 #ifndef ADVANCEDLOGGER_H
@@ -56,18 +54,18 @@ class AdvancedLogger
 {
 public:
     AdvancedLogger(
-        const char *logFilePath = DEFAULT_LOG_PATH,
-        const char *configFilePath = DEFAULT_CONFIG_PATH,
-        const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
+        const char *logFilePath,
+        const char *configFilePath,
+        const char *timestampFormat);
 
     void begin();
 
-    void verbose(const char *format, const char *function = "unknown", ...);
-    void debug(const char *format, const char *function = "unknown", ...);
-    void info(const char *format, const char *function = "unknown", ...);
-    void warning(const char *format, const char *function = "unknown", ...);
-    void error(const char *format, const char *function = "unknown", ...);
-    void fatal(const char *format, const char *function = "unknown", ...);
+    void verbose(const char *format, const char *function, ...);
+    void debug(const char *format, const char *function, ...);
+    void info(const char *format, const char *function, ...);
+    void warning(const char *format, const char *function, ...);
+    void error(const char *format, const char *function, ...);
+    void fatal(const char *format, const char *function, ...);
 
     void setPrintLevel(LogLevel logLevel);
     void setSaveLevel(LogLevel logLevel);
