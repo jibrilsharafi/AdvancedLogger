@@ -41,8 +41,8 @@ const char *ntpServer2 = "time.nist.gov";
 const char *ntpServer3 = "time.windows.com";
 
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
-const char *ssid = "Casetta";
-const char *password = "AmoriDiZzia2023!";
+const char *ssid = "YOUR_SSID";
+const char *password = "YOUR_PASSWORD";
 
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
