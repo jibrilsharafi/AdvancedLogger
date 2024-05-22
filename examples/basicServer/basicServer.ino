@@ -1,60 +1,51 @@
 /*
- * File: basicServer.cpp
+ * File: basicServer.ino
  * --------------------
  * This file provides a simple example to show how to use the AdvancedLogger library.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 07/04/2024
+ * Created: 21/03/2024
+ * Last modified: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
- * This example is a simple web server that serves a webpage with a button
- * that sends the user to the /log page, where the logs are displayed, and
- * another button that sends the user to the /config page, where the configuration
- * is displayed.
- *
- * Remember to change the ssid and password to your own.
- *
- * Tested only on the ESP32. For other boards, you may need to change the
- * WebServer library.
- *
- * Possible logging levels:
- * - ADVANCEDLOGGER_VERBOSE
- * - ADVANCEDLOGGER_DEBUG
- * - ADVANCEDLOGGER_INFO
- * - ADVANCEDLOGGER_WARNING
- * - ADVANCEDLOGGER_ERROR
- * - ADVANCEDLOGGER_FATAL
+ * This example covers the addition of a simple web server to the basicUsage, which allows
+ * the user to explore the log and configuration files remotely.
+ * 
+ * All the other advanced usage features are reported in the basicUsage example.
  */
+
 #include <Arduino.h>
 #include <SPIFFS.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <WiFi.h>
 
 #include "AdvancedLogger.h"
 
-String customLogPath = "/customPath/log.txt";
-String customConfigPath = "/customPath/config.txt";
-
-AdvancedLogger logger(customLogPath.c_str(), customConfigPath.c_str()); // Leave empty for default paths
+const char *customLogPath = "/customPath/log.txt";
+const char *customConfigPath = "/customPath/config.txt";
+const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
+AdvancedLogger logger(
+    customLogPath,
+    customConfigPath,
+    customTimestampFormat);
 
 AsyncWebServer server(80);
 
-String printLevel;
-String saveLevel;
-
-long lastMillisLogDump = 0;
-const long intervalLogDump = 10000;
-
-long lastMillisLogClear = 0;
-const long intervalLogClear = 30000;
-
-int maxLogLines = 100; // Low value for testing purposes
+const int timeZone = 0; // UTC. In milliseconds
+const int daylightOffset = 0; // No daylight saving time. In milliseconds
+const char *ntpServer1 = "pool.ntp.org";
+const char *ntpServer2 = "time.nist.gov";
+const char *ntpServer3 = "time.windows.com";
 
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
 const char *ssid = "YOUR_SSID";
 const char *password = "YOUR_PASSWORD";
+
+long lastMillisLogClear = 0;
+const long intervalLogClear = 30000;
 
 void setup()
 {
@@ -69,78 +60,61 @@ void setup()
 
     logger.begin();
 
-    // Setting the print and save levels is not mandatory.
-    // If you don't set them, the default levels are first taken
-    // from the SPIFFS file, and if it doesn't exist, the default
-    // levels are used (DEBUG for print and INFO for save).
-    logger.setPrintLevel(ADVANCEDLOGGER_DEBUG);
-    logger.setSaveLevel(ADVANCEDLOGGER_INFO);
-    // Set the maximum number of log lines before the log is cleared
-    // If you don't set this, the default is used
-    logger.setMaxLogLines(maxLogLines);
-    logger.log("AdvancedLogger setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
-
+    logger.debug("AdvancedLogger setup done!", "basicServer::setup");
+    
     // Connect to WiFi
     // --------------------
+    // Connect to the specified SSID
     WiFi.begin(ssid, password);
+    
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(1000);
-        logger.log("Connecting to WiFi..", "basicServer::setup", ADVANCEDLOGGER_INFO);
+        logger.info("Connecting to WiFi... SSID: %s | Password: %s", "basicServer::setup", ssid, password);
     }
-    logger.log(("IP address: " + WiFi.localIP().toString()).c_str(), "basicServer::setup", ADVANCEDLOGGER_INFO);
+    
+    logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), "basicServer::setup");
+
+    configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
 
     // Serve a simple webpage with a button that sends the user to the page /log and /config
     // --------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button><br><br><button onclick=\"window.location.href='/config'\">Explore the configuration</button>"); });
-    server.serveStatic("/log", SPIFFS, customLogPath.c_str());
-    server.serveStatic("/config", SPIFFS, customConfigPath.c_str());
+    
+    server.serveStatic("/log", SPIFFS, customLogPath);
+    server.serveStatic("/config", SPIFFS, customConfigPath);
+    
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });
     server.begin();
-    logger.log("Server started!", "basicServer::setup", ADVANCEDLOGGER_INFO);
+    
+    logger.info("Server started!", "basicServer::setup");
 
-    lastMillisLogDump = millis();
-    lastMillisLogClear = millis();
-    logger.log("Setup done!", "basicServer::setup", ADVANCEDLOGGER_INFO);
+    logger.info("Setup done!", "basicServer::setup");
 }
 
 void loop()
 {
-    logger.log("This is a debug message!", "basicServer::loop", ADVANCEDLOGGER_DEBUG);
+    logger.debug("This is a debug message!", "basicServer::loop");
     delay(500);
-    logger.log("This is an info message!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
+    logger.info("This is an info message!!", "basicServer::loop");
     delay(500);
-    logger.log("This is a warning message!!!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+    logger.warning("This is a warning message!!!", "basicServer::loop");
     delay(500);
-    logger.log("This is a error message!!!!", "basicServer::loop", ADVANCEDLOGGER_ERROR);
+    logger.error("This is a error message!!!!", "basicServer::loop");
     delay(500);
-    logger.log("This is a fatal message!!!!!", "basicServer::loop", ADVANCEDLOGGER_FATAL);
+    logger.fatal("This is a fatal message!!!!!", "basicServer::loop");
     delay(500);
-    logger.logOnly("This is an info message (logOnly)!!", "basicServer::loop", ADVANCEDLOGGER_INFO);
-    delay(1000);
+    logger.info("This is an info message!!", "basicServer::loop", true);
+    delay(1000);;
 
-    printLevel = logger.getPrintLevel();
-    saveLevel = logger.getSaveLevel();
-
-    if (millis() - lastMillisLogDump > intervalLogDump)
-    {
-        logger.dumpToSerial();
-
-        lastMillisLogDump = millis();
-    }
-    
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
-        logger.log(
-            ("Current number of log lines: " + String(logger.getLogLines())).c_str(),
-            "basicServer::loop",
-            ADVANCEDLOGGER_INFO
-        );
+        logger.info("Current number of log lines: %d", "basicServer::loop", logger.getLogLines());
         logger.clearLog();
-        logger.setDefaultLogLevels();
-        logger.log("Log cleared!", "basicServer::loop", ADVANCEDLOGGER_WARNING);
+        logger.setDefaultConfig();
+        logger.warning("Log cleared!", "basicServer::loop");
 
         lastMillisLogClear = millis();
     }
