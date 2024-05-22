@@ -1,86 +1,110 @@
+![Apparently this is what AI thinks about this library](logo.png)
+
 # AdvancedLogger
 
-[![Release](https://img.shields.io/github/v/release/jibrilsharafi/AdvancedLogger)](#release)
-
+[![Release](https://img.shields.io/github/v/release/jibrilsharafi/AdvancedLogger)](https://github.com/jibrilsharafi/AdvancedLogger/releases/latest)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/jijio/library/AdvancedLogger.svg)](https://registry.platformio.org/libraries/jijio/AdvancedLogger)
-
 [![arduino-library-badge](https://www.ardu-badge.com/badge/AdvancedLogger.svg?)](https://www.ardu-badge.com/AdvancedLogger)
 
 [![ESP32](https://img.shields.io/badge/ESP-32S3-000000.svg?longCache=true&style=flat&colorA=CC101F)](https://www.espressif.com/en/products/socs/esp32-S3)
+
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/jibrilsharafi/AdvancedLogger/blob/master/LICENSE)
 
 [![BuyMeACoffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/jibrilsharafi)
 
 A **simple** logging library capable of **saving logs to memory** and with a **comprehensive format** capable of including all the accessory information to each message.
 
-Usage:
+## Installing
+
+The library is available on the [PlatformIO registry](https://registry.platformio.org/libraries/jijio/AdvancedLogger), and can be installed by adding the following line to the `platformio.ini` file:
+
+```ini
+lib_deps = jijio/AdvancedLogger
+```
+
+Moreover, the library is also available on the [Arduino Library Manager](https://www.arduinolibraries.info/libraries/advanced-logger), and can be installed by searching for `AdvancedLogger` in the Library Manager.
+
+Alternatively, the library can be installed manually by downloading the latest release from the [releases page](https://github.com/jibrilsharafi/AdvancedLogger/releases).
+
+**No external dependencies are required**, as the library uses only the standard libraries in the Arduino Framework.
+
+The library so far has been successfully tested on the following microcontrollers:
+- ESP32S3
+
+## Usage
+### Basic
+The simplest way to use the library is the following:
 ```cpp
+#include <AdvancedLogger.h>
+
 AdvancedLogger logger;
-...
-logger.begin();
-...
-logger.log("This is an info message!", "main::setup", ADVANCEDLOGGER_INFO);
-delay(1000);
-logger.log("This is an error message!!", "main::loop", ADVANCEDLOGGER_ERROR);
+
+void setup() {
+    ...
+    logger.begin();
+    ...
+}
+
+void loop() {
+    ...
+    logger.info("This is an info message!", "main::setup");
+    delay(1000);
+    logger.error("This is an error message!! Random value: %d", "main::loop", random(0, 100));
+    ...
+}
 ```
-Output (both in the Serial and in the log file in memory):
+Output (both in the Serial and in the log file in the SPIFFS memory):
+
 ```cpp
-[2024-03-23 09:44:10] [1450 ms] [INFO] [Core 1] [main::setup] This is an info message!
-[2024-03-23 09:44:12] [3250 ms] [ERROR] [Core 1] [main::loop] This is an error message!!
+[2024-03-23 09:44:10] [1 450 ms] [INFO   ] [Core 1] [main::setup] This is an info message!
+[2024-03-23 09:44:11] [2 459 ms] [ERROR  ] [Core 1] [main::loop] This is an error message!! Random value: 42
 ```
-For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.cpp) and [basicServer](examples/basicServer/basicServer.cpp) in the examples folder.
+### Advanced
+The library provides the following public methods:
+- `begin()`: initializes the logger, creating the log file and loading the configuration.
+- Logging methods. All of them have the same structure, where the first argument is the message to be logged, and the second argument is the function name. The message can be formatted using the `printf` syntax.
+  - `verbose(const char *format, const char *function = "functionName", ...)`
+  - `debug(const char *format, const char *function = "functionName", ...)`
+  - `info(const char *format, const char *function = "functionName", ...)`
+  - `warning(const char *format, const char *function = "functionName", ...)`
+  - `error(const char *format, const char *function = "functionName", ...)`
+  - `fatal(const char *format, const char *function = "functionName", ...)`
+- `setPrintLevel(LogLevel logLevel)` and `setSaveLevel(LogLevel logLevel)`: set the log level for printing and saving respectively. The log level can be one of the following (The default log level is **INFO**, and the default save level is WARNING): 
+  - `LogLevel::VERBOSE` 
+  - `LogLevel::DEBUG`
+  - `LogLevel::INFO`
+  - `LogLevel::WARNING` 
+  - `LogLevel::ERROR` 
+  - `LogLevel::FATAL` 
+- `getPrintLevel()` and `getSaveLevel()`: get the log level for printing and saving respectively, as a LogLevel enum. To be used in conjunction with the `logLevelToString` method.
+- `logLevelToString(LogLevel logLevel, bool trim = true)`: convert a log level from the LogLevel enum to a String.
+- `setMaxLogLines(int maxLogLines)`: set the maximum number of log lines. The default value is 1000.
+- `getLogLines()`: get the number of log lines.
+- `clearLog()`: clear the log.
+- `dump(Stream& stream)`: dump the log to a stream, such as the Serial or an opened file.
+- `setDefaultConfig()`: set the default configuration.
 
-## Why?
-There is no way of sugar-coat it: *every well-developed project will eventually need a proper logging* in place to make sure that not only everything is fully monitored, but also that everything monitored is later accessible for debugging. 
-The development of [EnergyMe](https://github.com/jibrilsharafi/EnergyMe-Home) (my open-source energy monitoring device) quickly led to the necessity of having such feature. Nonetheless, I quickly found out that no repositories on GitHub where available capable of fully covering all of my [Requirements](#requirements).
-### Requirements
-Does it exist a C++ module for the ESP32 (the projects I am currently working on use this microcontroller) that allows logging with the following features:
-- **Format**: a comprehensive format capable of including all the accessory information to each print message. Something like: `[2024-03-13 09:44:10] [1313 ms] [INFO] [Core 1] [main::setup] Setting up ADE7953...`, which indeed explains very clearly the nature and context of the message. This type of logging is the norm in more complex systems and environments. 
-- **Saving to memory**: developing a complex logging system is useless if it can only be accessed in real time. The ability of saving each message in chronological order in a long time storage medium is crucial to unlock the full potential of it. 
-- **Ease of use**: the module should comprise of only a few functions, such as the core one `log(...)`  and the accessory ones needed to set the print and save levels to adapt to each use case. 
-### Don't reinvent the wheel
-Some existing libraries are:
+For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.ino) and [basicServer](examples/basicServer/basicServer.ino) in the examples folder.
 
-|                                                Name                                                |                       Owner                       |                                                                     Description                                                                     | Format | Saving | Ease of use |
-| :------------------------------------------------------------------------------------------------: | :-----------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------: | :----: | :----: | :---------: |
-|                            **[elog](https://github.com/x821938/elog)**                             |       [x821938](https://github.com/x821938)       |                                  Fast and efficient logging to multiple outputs, with many configuration settings.                                  |   ❕    |   ✔    |      ✔      |
-|                 **[ESP.multiLogger](https://github.com/voelkerb/ESP.multiLogger)**                 |      [voelkerb](https://github.com/voelkerb)      |                                                         Simple logging to multiple outputs.                                                         |   ❌    |   ✔    |      ✔      |
-|                          **[logging](https://github.com/esp32m/logging)**                          |        [esp32m](https://github.com/esp32m)        |                                           Context-based logging, multiple appenders, buffers and queues.                                            |   ❌    |   ✔    |      ❕      |
-|                 **[MycilaLogger](https://github.com/mathieucarbou/MycilaLogger)**                  | [mathieucarbou](https://github.com/mathieucarbou) |                                        Simple and efficient. A wrapper around the standard `buffer.print()`.                                        |   ❌    |   ❌    |      ✔      |
-| **[esp_log.h](https://github.com/espressif/esp-idf/blob/master/components/log/include/esp_log.h)** |     [espressif](https://github.com/espressif)     | Native method implemented by espressif. [Documentation](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/log.html). |   ❌    |   ❌    |      ❌      |
+## Contributing
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**. If you'd like to contribute, please fork the repository and use a feature branch. Pull requests are warmly welcome.
 
-Many other similar libraries exists, but it is clear that **none of the reported libraries** (and of the others available on *GitHub*) **fully match my requirements**.
-## How?
-The rule is one: *keep it simple*.
-I am in no way a advanced coder, and as such I tend to structure and write code to be as streamlined and simple as possible. So, no memory optimization or any of the pointer-magic stuff in C++. *Not my kink*.
-### Format
-**The format** of the message should **include any information** that could store **any value**. As such, everything related to the time should be logged, along with information about the location of the code in which the log takes place, as well as having different logging levels. 
-We can set a custom format by using the function `sprintf` and passing the following as third argument: 
-- `[%s] [%lu ms] [%s] [Core %d] [%s] %s` → `[2024-03-13 09:44:10] [1313 ms] [INFO] [Core 1] [main::setup] Setting up ADE7953...`
-which will represent the following parts: 
-- `[%s]` → `[2024-03-13 09:44:10]`: human-readable ISO8601 format in the format `%Y-%m-%d %H:%M:%S`. Indeed, the time must be set externally via other libraries.
-- `[%lu ms]` → `[1313 ms]`: time passed since device boot, in *ms*. Crucial to precisely evaluate the time taken to perform any action.  
-- `[%s]` → `[INFO]`: the log level, which could be one of the following 5 levels: *DEBUG, INFO, WARNING, ERROR, FATAL*.
-- `[Core %d]` → `[Core 1]`: core in which the operation takes place. Useful for multi-core devices (such as many ESP32 variations).
-- `[%s]` → `[main::setup]`: the current function, or in general any name to identify a particular section of the code.
-- `%s` → `Setting up ADE7953...`: the actual message that contains all the info needed to be logged. 
-### Saving to memory
-Saving should be quite straightforward: just copy any message that is sent to the serial to a log file, appending it to the end with a newline. It has to be noted that a memory clearing has to be set in place in order to avoid filling all the SPIFFS memory of the device, making it slow and unresponsive.
-### Ease of use
-Last but not least, the use should be as simple as possible: you just need to create `AdvancedLogger advancedLogger;` and simply use `advancedLogger.log("Setting up ADE7953...", "main::setup", INFO);`
+For more information regarding the necessity of this library, see the [WHY.md](WHY.md) file. 
 
-## Dependencies
-This project has no external dependencies, and uses only the standard libraries.
-
-## What's next?
-- [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object.
+### What's next?
 - [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
-- [x] **Dump to serial**: implement a function that dumps the entire log to the serial, so that it can be accessed in real time.
-- [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
-- [x] **Dump to serial**: implement a function that dumps the entire log to the serial, so that it can be accessed in real time.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library. Some effort has been made in this direction, but the nested folder approach gave some problems.
-- [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility.
+- [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility. The *ESP8266* has been tested, but full compatibility has not been achieved yet.
 - [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
-- [x] ~~**Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.~~ Not needed, as the format is already quite clear.
+- [x] **Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.
 - [ ] **Buffered logging**: the ability to buffer the logs and send them in chunks would be a great addition, as it would allow to save power and reduce the number of writes to the memory. This has been tested, but the results did not show any significant improvement in speed.
+- [x] **New APIs**: the logging APIs should be updated to be more consistent with the usual logging APIs, such as log.debug(...), log.info(...), log.error(...), etc.
+- [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object, to allow for different log files.
+- [x] **Custom timestamp format**: the ability to set a custom timestamp format would be a great addition, as it would allow to adapt the logs to different needs and regions.
+- [x] **Dump to any stream**: the ability to dump the logs to any stream would be a great addition, as it would allow to send the logs to different destinations, such as a file or a serial port.
+
+## Licensing
+
+The code in this project is licensed under MIT license. See the [LICENSE](LICENSE) file for more information.

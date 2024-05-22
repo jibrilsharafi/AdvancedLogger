@@ -1,141 +1,342 @@
 #include "AdvancedLogger.h"
 
-AdvancedLogger::AdvancedLogger(const char *logFilePath, const char *configFilePath)
-    : _logFilePath(logFilePath), _configFilePath(configFilePath)
-{
-    _printLevel = ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL;
-    _saveLevel = ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL;
-    _maxLogLines = ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES;
+// Macros
+#define PROCESS_ARGS(format, function)                   \
+    char _message[MAX_LOG_LENGTH];                       \
+    va_list args;                                        \
+    va_start(args, function);                            \
+    vsnprintf(_message, sizeof(_message), format, args); \
+    va_end(args);
 
-    _logLines = 0;
+/**
+ * @brief Constructs a new AdvancedLogger object.
+ *
+ * This constructor initializes the AdvancedLogger object with the provided
+ * log file path, config file path, and timestamp format. If the provided paths
+ * or format are invalid, it uses the default values and logs a warning.
+ *
+ * @param logFilePath Path to the log file. If invalid, the default path will be used.
+ * @param configFilePath Path to the config file. If invalid, the default path will be used.
+ * @param timestampFormat Format for timestamps in the log. If invalid, the default format will be used.
+ */
+AdvancedLogger::AdvancedLogger(
+    const char *logFilePath = DEFAULT_LOG_PATH,
+    const char *configFilePath = DEFAULT_CONFIG_PATH,
+    const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT)
+    : _logFilePath(logFilePath),
+      _configFilePath(configFilePath),
+      _timestampFormat(timestampFormat)
+{
+    if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
+    {
+        log_w(
+            "Invalid path for log %s or config file %s, using default paths: %s and %s",
+            _logFilePath.c_str(),
+            _configFilePath.c_str(),
+            DEFAULT_LOG_PATH,
+            DEFAULT_CONFIG_PATH);
+
+        _logFilePath = DEFAULT_LOG_PATH;
+        _configFilePath = DEFAULT_CONFIG_PATH;
+        _invalidPath = true;
+    }
+
+    if (!_isValidTimestampFormat(_timestampFormat))
+    {
+        log_w(
+            "Invalid timestamp format %s, using default format: %s",
+            _timestampFormat,
+            DEFAULT_TIMESTAMP_FORMAT);
+
+        _timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
+        _invalidTimestampFormat = true;
+    }
 }
 
+/**
+ * @brief Initializes the AdvancedLogger object.
+ *
+ * Initializes the AdvancedLogger object by setting the configuration
+ * from the SPIFFS filesystem. If the configuration file is not found,
+ * the default configuration is used.
+ * 
+ */
 void AdvancedLogger::begin()
 {
-    log("Initializing AdvancedLogger...", "AdvancedLogger::begin", ADVANCEDLOGGER_DEBUG);
+    debug("AdvancedLogger initializing...", "AdvancedLogger::begin");
 
     if (!_setConfigFromSpiffs())
     {
-        setDefaultLogLevels();
+        log_w("Failed to set config from filesystem, using default config");
+        setDefaultConfig();
     }
     _logLines = getLogLines();
 
-    log("AdvancedLogger initialized", "AdvancedLogger::begin", ADVANCEDLOGGER_DEBUG);
+    if (_invalidPath)
+    {
+        warning("Invalid path for log or config file, using default paths", "AdvancedLogger::begin");
+    }
+    if (_invalidTimestampFormat)
+    {
+        warning("Invalid timestamp format, using default format", "AdvancedLogger::begin");
+    }
+
+    debug("AdvancedLogger initialized", "AdvancedLogger::begin");
 }
 
-void AdvancedLogger::log(const char *message, const char *function, int logLevel)
+/**
+ * @brief Logs a verbose message.
+ *
+ * This method logs a verbose message with the provided format and function name.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::verbose(const char *format, const char *function = "unknown", ...)
 {
-    logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _printLevel && logLevel < _saveLevel)
+    PROCESS_ARGS(format, function);
+    _log(_message, function, LogLevel::VERBOSE);
+}
+
+/**
+ * @brief Logs a debug message.
+ *
+ * This method logs a debug message with the provided format and function name.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::debug(const char *format, const char *function = "unknown", ...)
+{
+    PROCESS_ARGS(format, function);
+    _log(_message, function, LogLevel::DEBUG);
+}
+
+/**
+ * @brief Logs an info message.
+ *
+ * This method logs an info message with the provided format and function name.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::info(const char *format, const char *function = "unknown", ...)
+{
+    PROCESS_ARGS(format, function);
+    _log(_message, function, LogLevel::INFO);
+}
+
+/**
+ * @brief Logs a warning message.
+ *
+ * This method logs a warning message with the provided format and function name.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::warning(const char *format, const char *function = "unknown", ...)
+{
+    PROCESS_ARGS(format, function);
+    _log(_message, function, LogLevel::WARNING);
+}
+
+/**
+ * @brief Logs an error message.
+ *
+ * This method logs an error message with the provided format and function name.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::error(const char *format, const char *function = "unknown", ...)
+{
+    PROCESS_ARGS(format, function);
+    _log(_message, function, LogLevel::ERROR);
+}
+
+/**
+ * @brief Logs a fatal message.
+ *
+ * This method logs a fatal message with the provided format and function name.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::fatal(const char *format, const char *function = "unknown", ...)
+{
+    PROCESS_ARGS(format, function);
+    _log(_message, function, LogLevel::FATAL);
+}
+
+/**
+ * @brief Logs a message with a specific log level.
+ *
+ * This method logs a message with the provided format, function name, and log level.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param logLevel Log level of the message.
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::_log(const char *message, const char *function, LogLevel logLevel)
+{
+    if (static_cast<int>(logLevel) < static_cast<int>(_printLevel) && (static_cast<int>(logLevel) < static_cast<int>(_saveLevel)))
     {
+        log_d("Message not logged due to log level too low");
         return;
     }
 
-    char _message_formatted[26 + strlen(message) + strlen(function) + 70]; // 26 = length of timestamp, 70 = length of log level
+    char _messageFormatted[MAX_LOG_LENGTH];
 
     snprintf(
-        _message_formatted,
-        sizeof(_message_formatted),
-        ADVANCEDLOGGER_FORMAT,
+        _messageFormatted,
+        sizeof(_messageFormatted),
+        LOG_FORMAT,
         _getTimestamp().c_str(),
-        millis(),
-        _logLevelToString(logLevel).c_str(),
-        xPortGetCoreID(),
+        _formatMillis(millis()).c_str(),
+        logLevelToString(logLevel, false).c_str(),
+        CORE_ID,
         function,
         message);
 
-    if (logLevel >= _printLevel)
-    {
-        Serial.println(_message_formatted);
-    }
+    Serial.println(_messageFormatted);
 
     if (logLevel >= _saveLevel)
     {
-        _save(_message_formatted);
+        _save(_messageFormatted);
         if (_logLines >= _maxLogLines)
         {
-            _logLines = 0;
             clearLog();
-            log(
-                ("Log cleared due to max log lines (" + String(_maxLogLines) + ") reached").c_str(),
-                "AdvancedLogger::log",
-                ADVANCEDLOGGER_WARNING);
         }
     }
 }
 
-void AdvancedLogger::logOnly(const char *message, const char *function, int logLevel)
+/**
+ * @brief Logs a message with a specific log level and prints it.
+ *
+ * This method logs a message with the provided format, function name, and log level.
+ * It also prints the message to the Serial monitor.
+ *
+ * @param format Format of the message.
+ * @param function Name of the function where the message is logged. 
+ * @param logLevel Log level of the message.
+ * @param ... Arguments to be formatted into the message using the printf format.
+*/
+void AdvancedLogger::_logPrint(const char *format, const char *function, LogLevel logLevel, ...)
 {
-    logLevel = _saturateLogLevel(logLevel);
-    if (logLevel < _printLevel)
+    if (static_cast<int>(logLevel) < static_cast<int>(_printLevel) && (static_cast<int>(logLevel) < static_cast<int>(_saveLevel)))
     {
+        log_d("Message not logged due to log level too low");
         return;
     }
 
-    char _message_formatted[26 + strlen(message) + strlen(function) + 70]; // 26 = length of timestamp, 70 = length of log level
+    PROCESS_ARGS(format, logLevel);
+    char logMessage[MAX_LOG_LENGTH + 200];
 
     snprintf(
-        _message_formatted,
-        sizeof(_message_formatted),
-        ADVANCEDLOGGER_FORMAT,
+        logMessage,
+        sizeof(logMessage),
+        LOG_FORMAT,
         _getTimestamp().c_str(),
-        millis(),
-        _logLevelToString(logLevel).c_str(),
-        xPortGetCoreID(),
+        _formatMillis(millis()).c_str(),
+        logLevelToString(logLevel, false).c_str(),
+        CORE_ID,
         function,
-        message);
+        _message);
 
-    if (logLevel >= _printLevel)
-    {
-        Serial.println(_message_formatted);
-    }
+    Serial.println(logMessage);
 }
 
-void AdvancedLogger::setPrintLevel(int level)
+/**
+ * @brief Sets the print level.
+ *
+ * This method sets the print level to the provided log level.
+ *
+ * @param logLevel Log level to set.
+*/
+void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 {
-    log(
-        ("Setting print level to " + String(level)).c_str(),
-        "AdvancedLogger::setPrintLevel",
-        ADVANCEDLOGGER_INFO);
-    _printLevel = _saturateLogLevel(level);
+    debug("Setting print level to %s", logLevelToString(logLevel).c_str(), "AdvancedLogger::setPrintLevel");
+    _printLevel = logLevel;
     _saveConfigToSpiffs();
 }
 
-void AdvancedLogger::setSaveLevel(int level)
+/**
+ * @brief Sets the save level.
+ *
+ * This method sets the save level to the provided log level.
+ *
+ * @param logLevel Log level to set.
+*/
+void AdvancedLogger::setSaveLevel(LogLevel logLevel)
 {
-    log(
-        ("Setting save level to " + String(level)).c_str(),
-        "AdvancedLogger::setSaveLevel",
-        ADVANCEDLOGGER_INFO);
-    _saveLevel = _saturateLogLevel(level);
+    debug("Setting save level to %s", logLevelToString(logLevel).c_str(), "AdvancedLogger::setSaveLevel");
+    _saveLevel = logLevel;
     _saveConfigToSpiffs();
 }
 
-String AdvancedLogger::getPrintLevel()
+/**
+ * @brief Gets the print level.
+ *
+ * This method returns the current print level.
+ *
+ * @return LogLevel Current print level.
+*/
+LogLevel AdvancedLogger::getPrintLevel()
 {
-    return _logLevelToString(_printLevel);
+    return _printLevel;
 }
 
-String AdvancedLogger::getSaveLevel()
+/**
+ * @brief Gets the save level.
+ *
+ * This method returns the current save level.
+ *
+ * @return LogLevel Current save level.
+*/
+LogLevel AdvancedLogger::getSaveLevel()
 {
-    return _logLevelToString(_saveLevel);
+    return _saveLevel;
 }
 
-void AdvancedLogger::setDefaultLogLevels()
+/**
+ * @brief Sets the configuration to default.
+ *
+ * This method sets the configuration to the default values.
+*/
+void AdvancedLogger::setDefaultConfig()
 {
-    setPrintLevel(ADVANCEDLOGGER_DEFAULT_PRINT_LEVEL);
-    setSaveLevel(ADVANCEDLOGGER_DEFAULT_SAVE_LEVEL);
-    setMaxLogLines(ADVANCEDLOGGER_DEFAULT_MAX_LOG_LINES);
+    debug("Setting config to default...", "AdvancedLogger::setDefaultConfig");
 
-    log("Log levels set to default", "AdvancedLogger::setDefaultLogLevels", ADVANCEDLOGGER_INFO);
+    setPrintLevel(DEFAULT_PRINT_LEVEL);
+    setSaveLevel(DEFAULT_SAVE_LEVEL);
+    setMaxLogLines(DEFAULT_MAX_LOG_LINES);
+
+    debug("Config set to default", "AdvancedLogger::setDefaultConfig");
 }
 
+/**
+ * @brief Sets the maximum number of log lines.
+ *
+ * This method sets the maximum number of log lines to the provided value.
+ *
+ * @param maxLogLines Maximum number of log lines.
+*/
 bool AdvancedLogger::_setConfigFromSpiffs()
 {
+    debug("Setting config from filesystem...", "AdvancedLogger::_setConfigFromSpiffs");
+
     File _file = SPIFFS.open(_configFilePath, "r");
     if (!_file)
     {
-        log("Failed to open config file for reading", "AdvancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_ERROR);
+        LOG_E("Failed to open config file for reading");
+        _logPrint("Failed to open config file", "AdvancedLogger::_setConfigFromSpiffs", LogLevel::ERROR);
         return false;
     }
 
@@ -145,14 +346,15 @@ bool AdvancedLogger::_setConfigFromSpiffs()
         int separatorPosition = line.indexOf('=');
         String key = line.substring(0, separatorPosition);
         String value = line.substring(separatorPosition + 1);
+        value.trim();
 
         if (key == "printLevel")
         {
-            setPrintLevel(value.toInt());
+            setPrintLevel(_charToLogLevel(value.c_str()));
         }
         else if (key == "saveLevel")
         {
-            setSaveLevel(value.toInt());
+            setSaveLevel(_charToLogLevel(value.c_str()));
         }
         else if (key == "maxLogLines")
         {
@@ -161,43 +363,66 @@ bool AdvancedLogger::_setConfigFromSpiffs()
     }
 
     _file.close();
-    log("Log levels set from SPIFFS", "AdvancedLogger::_setConfigFromSpiffs", ADVANCEDLOGGER_DEBUG);
+
+    debug("Config set from filesystem", "AdvancedLogger::_setConfigFromSpiffs");
     return true;
 }
 
+/**
+ * @brief Saves the configuration to the SPIFFS filesystem.
+ *
+ * This method saves the configuration to the SPIFFS filesystem.
+*/
 void AdvancedLogger::_saveConfigToSpiffs()
 {
+    debug("Saving config to filesystem...", "AdvancedLogger::_saveConfigToSpiffs");
     File _file = SPIFFS.open(_configFilePath, "w");
     if (!_file)
     {
-        log("Failed to open config file for writing", "AdvancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_ERROR);
+        LOG_E("Failed to open config file for writing");
+        _logPrint("Failed to open config file", "AdvancedLogger::_saveConfigToSpiffs", LogLevel::ERROR);
         return;
     }
 
-    _file.println(String("printLevel=") + String(_printLevel));
-    _file.println(String("saveLevel=") + String(_saveLevel));
+    _file.println(String("printLevel=") + logLevelToString(_printLevel));
+    _file.println(String("saveLevel=") + logLevelToString(_saveLevel));
     _file.println(String("maxLogLines=") + String(_maxLogLines));
     _file.close();
-    log("Log levels saved to SPIFFS", "AdvancedLogger::_saveConfigToSpiffs", ADVANCEDLOGGER_DEBUG);
+
+    debug("Config saved to filesystem", "AdvancedLogger::_saveConfigToSpiffs");
 }
 
-void AdvancedLogger::setMaxLogLines(int maxLines)
+/**
+ * @brief Sets the maximum number of log lines.
+ *
+ * This method sets the maximum number of log lines to the provided value.
+ *
+ * @param maxLogLines Maximum number of log lines.
+*/
+void AdvancedLogger::setMaxLogLines(int maxLogLines)
 {
-    log(
-        ("Setting max log lines to " + String(maxLines)).c_str(),
-        "AdvancedLogger::setMaxLogLines",
-        ADVANCEDLOGGER_INFO);
-    _maxLogLines = maxLines;
+    debug(
+        ("Setting max log lines to " + String(maxLogLines)).c_str(),
+        "AdvancedLogger::setMaxLogLines");
+    _maxLogLines = maxLogLines;
     _saveConfigToSpiffs();
 }
 
+/**
+ * @brief Gets the number of log lines.
+ *
+ * This method returns the number of log lines in the log file.
+ *
+ * @return int Number of log lines.
+*/
 int AdvancedLogger::getLogLines()
 {
     File _file = SPIFFS.open(_logFilePath, "r");
     if (!_file)
     {
-        logOnly("Failed to open log file", "AdvancedLogger::getLogLines", ADVANCEDLOGGER_ERROR);
-        return -1;
+        LOG_E("Failed to open log file for reading");
+        _logPrint("Failed to open log file", "AdvancedLogger::getLogLines", LogLevel::ERROR);
+        return 0;
     }
 
     int lines = 0;
@@ -212,102 +437,250 @@ int AdvancedLogger::getLogLines()
     return lines;
 }
 
+/**
+ * @brief Clears the log.
+ *
+ * This method clears the log file.
+*/
 void AdvancedLogger::clearLog()
 {
-    logOnly("Clearing log", "AdvancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
-    SPIFFS.remove(_logFilePath);
     File _file = SPIFFS.open(_logFilePath, "w");
     if (!_file)
     {
-        logOnly("Failed to open log file", "AdvancedLogger::clearLog", ADVANCEDLOGGER_ERROR);
+        LOG_E("Failed to open log file for writing");
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLog", LogLevel::ERROR);
         return;
     }
+    _file.print("");
     _file.close();
-    log("Log cleared", "AdvancedLogger::clearLog", ADVANCEDLOGGER_WARNING);
+    _logLines = 0;
+    _logPrint("Log cleared", "AdvancedLogger::clearLog", LogLevel::INFO);
 }
 
+/**
+ * @brief Saves a message to the log file.
+ *
+ * This method saves a message to the log file.
+ *
+ * @param messageFormatted Formatted message to save.
+*/
 void AdvancedLogger::_save(const char *messageFormatted)
 {
     File _file = SPIFFS.open(_logFilePath, "a");
-    if (_file)
+    if (!_file)
+    {
+        LOG_E("Failed to open log file for writing");
+        _logPrint("Failed to open log file", "AdvancedLogger::_save", LogLevel::ERROR);
+        return;
+    }
+    else
     {
         _file.println(messageFormatted);
         _file.close();
         _logLines++;
     }
-    else
-    {
-        logOnly("Failed to open log file", "AdvancedLogger::_save", ADVANCEDLOGGER_ERROR);
-    }
 }
 
-void AdvancedLogger::dumpToSerial()
+/**
+ * @brief Dumps the log to a Stream.
+ *
+ * Dump the log to a Stream, such as Serial or an opened file.
+ *
+ * @param stream Stream to dump the log to.
+*/
+void AdvancedLogger::dump(Stream &stream)
 {
-    logOnly(
-        "Dumping log to Serial",
-        "AdvancedLogger::dumpToSerial",
-        ADVANCEDLOGGER_INFO);
-
-    for (int i = 0; i < 2 * 50; i++)
-        Serial.print("_");
-    Serial.println();
+    debug("Dumping log to Stream...", "AdvancedLogger::dump");
 
     File _file = SPIFFS.open(_logFilePath, "r");
     if (!_file)
     {
-        logOnly("Failed to open log file", "AdvancedLogger::dumpToSerial", ADVANCEDLOGGER_ERROR);
+        LOG_E("Failed to open log file for reading");
+        _logPrint("Failed to open log file", "AdvancedLogger::dump", LogLevel::ERROR);
         return;
     }
+
     while (_file.available())
     {
-        Serial.write(_file.read());
-        Serial.flush();
+        stream.write(_file.read());
     }
+    stream.flush();
     _file.close();
 
-    for (int i = 0; i < 2 * 50; i++)
-        Serial.print("_");
-    Serial.println();
-
-    logOnly(
-        "Log dumped to Serial",
-        "AdvancedLogger::dumpToSerial",
-        ADVANCEDLOGGER_INFO);
+    debug("Log dumped to Stream", "AdvancedLogger::dump");
 }
 
-String AdvancedLogger::_logLevelToString(int logLevel)
+/**
+ * @brief Converts a log level to a string.
+ *
+ * This method converts a log level to a string.
+ *
+ * @param logLevel Log level to convert.
+ * @param trim Whether to trim the string.
+ * @return String String representation of the log level.
+*/
+String AdvancedLogger::logLevelToString(LogLevel logLevel, bool trim)
 {
+    String logLevelStr;
+
     switch (logLevel)
     {
-    case ADVANCEDLOGGER_VERBOSE:
-        return "VERBOSE";
-    case ADVANCEDLOGGER_DEBUG:
-        return "DEBUG";
-    case ADVANCEDLOGGER_INFO:
-        return "INFO";
-    case ADVANCEDLOGGER_WARNING:
-        return "WARNING";
-    case ADVANCEDLOGGER_ERROR:
-        return "ERROR";
-    case ADVANCEDLOGGER_FATAL:
-        return "FATAL";
+    case LogLevel::DEBUG:
+        logLevelStr = "DEBUG  ";
+        break;
+    case LogLevel::INFO:
+        logLevelStr = "INFO   ";
+        break;
+    case LogLevel::WARNING:
+        logLevelStr = "WARNING";
+        break;
+    case LogLevel::ERROR:
+        logLevelStr = "ERROR  ";
+        break;
+    case LogLevel::FATAL:
+        logLevelStr = "FATAL  ";
+        break;
     default:
-        return "UNKNOWN";
+        log_w("Unknown log level %d", static_cast<int>(logLevel));
+        logLevelStr = "UNKNOWN";
+        break;
+    }
+
+    if (trim)
+    {
+        logLevelStr.trim();
+    }
+
+    return logLevelStr;
+}
+
+/**
+ * @brief Converts a character to a log level.
+ *
+ * This method converts a character to a log level.
+ *
+ * @param logLevelChar Character to convert.
+ * @return LogLevel Log level.
+*/
+LogLevel AdvancedLogger::_charToLogLevel(const char *logLevelChar)
+{
+    if (strcmp(logLevelChar, "DEBUG") == 0)
+        return LogLevel::DEBUG;
+    else if (strcmp(logLevelChar, "INFO") == 0)
+        return LogLevel::INFO;
+    else if (strcmp(logLevelChar, "WARNING") == 0)
+        return LogLevel::WARNING;
+    else if (strcmp(logLevelChar, "ERROR") == 0)
+        return LogLevel::ERROR;
+    else if (strcmp(logLevelChar, "FATAL") == 0)
+        return LogLevel::FATAL;
+    else
+        log_w(
+            "Unknown log level %s, using default log level %s",
+            logLevelChar,
+            logLevelToString(DEFAULT_PRINT_LEVEL).c_str());
+    return DEFAULT_PRINT_LEVEL;
+}
+
+/**
+ * @brief Gets the timestamp.
+ *
+ * This method gets the timestamp.
+ *
+ * @return String Timestamp.
+*/
+String AdvancedLogger::_getTimestamp()
+{
+    char _timestamp[1024];
+
+    time_t _time = time(nullptr);
+    struct tm _timeinfo = *localtime(&_time);
+    strftime(_timestamp, sizeof(_timestamp), _timestampFormat, &_timeinfo);
+    return String(_timestamp);
+}
+
+/**
+ * @brief Checks if a path is valid.
+ *
+ * This method checks if a path is valid.
+ *
+ * @param path Path to check.
+ * @return bool Whether the path is valid.
+*/
+bool AdvancedLogger::_isValidPath(const char *path)
+{
+    const char *invalidChars = "<>:\"\\|?*";
+    const char *invalidStartChars = ". ";
+    const char *invalidEndChars = " .";
+    const int filesystemMaxPathLength = 255;
+
+    for (size_t i = 0; i < strlen(invalidChars); i++)
+    {
+        if (strchr(path, invalidChars[i]) != nullptr)
+        {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < strlen(invalidStartChars); i++)
+    {
+        if (path[0] == invalidStartChars[i])
+        {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < strlen(invalidEndChars); i++)
+    {
+        if (path[strlen(path) - 1] == invalidEndChars[i])
+        {
+            return false;
+        }
+    }
+
+    if (strlen(path) > filesystemMaxPathLength)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief Checks if a timestamp format is valid.
+ *
+ * This method checks if a timestamp format is valid.
+ *
+ * @param format Timestamp format to check.
+ * @return bool Whether the timestamp format is valid.
+*/
+bool AdvancedLogger::_isValidTimestampFormat(const char *format)
+{
+    if (_getTimestamp().length() > 0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
     }
 }
 
-int AdvancedLogger::_saturateLogLevel(int logLevel)
-{
-    return min(max(logLevel, ADVANCEDLOGGER_VERBOSE), ADVANCEDLOGGER_FATAL);
-}
-
-String AdvancedLogger::_getTimestamp()
-{
-    struct tm *_timeinfo;
-    char _timestamp[26];
-
-    long _time = static_cast<long>(time(nullptr));
-    _timeinfo = localtime(&_time);
-    strftime(_timestamp, sizeof(_timestamp), ADVANCEDLOGGER_TIMESTAMP_FORMAT, _timeinfo);
-    return String(_timestamp);
+/**
+ * @brief Formats milliseconds.
+ *
+ * This method formats milliseconds.
+ *
+ * @param millis Milliseconds to format.
+ * @return std::string Formatted milliseconds.
+*/
+std::string AdvancedLogger::_formatMillis(unsigned long millis) {
+    std::string str = std::to_string(millis);
+    int n = str.length();
+    int insertPosition = n - 3;
+    while (insertPosition > 0) {
+        str.insert(insertPosition, " ");
+        insertPosition -= 3;
+    }
+    return str;
 }
