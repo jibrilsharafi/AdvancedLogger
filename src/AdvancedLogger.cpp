@@ -262,7 +262,7 @@ void AdvancedLogger::_logPrint(const char *format, const char *function, LogLeve
 */
 void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 {
-    debug("Setting print level to %s", logLevelToString(logLevel).c_str(), "AdvancedLogger::setPrintLevel");
+    debug("Setting print level to %s", "AdvancedLogger::setPrintLevel", logLevelToString(logLevel).c_str());
     _printLevel = logLevel;
     _saveConfigToSpiffs();
 }
@@ -276,7 +276,7 @@ void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 */
 void AdvancedLogger::setSaveLevel(LogLevel logLevel)
 {
-    debug("Setting save level to %s", logLevelToString(logLevel).c_str(), "AdvancedLogger::setSaveLevel");
+    debug("Setting save level to %s", "AdvancedLogger::setSaveLevel", logLevelToString(logLevel).c_str());
     _saveLevel = logLevel;
     _saveConfigToSpiffs();
 }
