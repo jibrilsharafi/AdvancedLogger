@@ -36,8 +36,8 @@ enum class LogLevel : int {
     FATAL = 5
 };
 
-constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::INFO;
-constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::WARNING;
+constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
+constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
 
 constexpr int MAX_LOG_LENGTH = 1024;
 
