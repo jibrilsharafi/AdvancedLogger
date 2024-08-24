@@ -463,7 +463,7 @@ void AdvancedLogger::clearLog()
  * This method clears the log file but retains the latest X percent of log entries.
  * The default value is 10%.
  */
-void AdvancedLogger::clearLogKeepLatestXPercent(int percent = 10)
+void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
 {
     File _file = SPIFFS.open(_logFilePath, "r");
     if (!_file)
