@@ -29,11 +29,15 @@ Alternatively, the library can be installed manually by downloading the latest r
 **No external dependencies are required**, as the library uses only the standard libraries in the Arduino Framework.
 
 The library so far has been successfully tested on the following microcontrollers:
+
 - ESP32S3
 
 ## Usage
+
 ### Basic
+
 The simplest way to use the library is the following:
+
 ```cpp
 #include <AdvancedLogger.h>
 
@@ -53,14 +57,18 @@ void loop() {
     ...
 }
 ```
+
 Output (both in the Serial and in the log file in the SPIFFS memory):
 
 ```cpp
 [2024-03-23 09:44:10] [1 450 ms] [INFO   ] [Core 1] [main::setup] This is an info message!
 [2024-03-23 09:44:11] [2 459 ms] [ERROR  ] [Core 1] [main::loop] This is an error message!! Random value: 42
 ```
+
 ### Advanced
+
 The library provides the following public methods:
+
 - `begin()`: initializes the logger, creating the log file and loading the configuration.
 - Logging methods. All of them have the same structure, where the first argument is the message to be logged, and the second argument is the function name. The message can be formatted using the `printf` syntax.
   - `verbose(const char *format, const char *function = "functionName", ...)`
@@ -69,17 +77,18 @@ The library provides the following public methods:
   - `warning(const char *format, const char *function = "functionName", ...)`
   - `error(const char *format, const char *function = "functionName", ...)`
   - `fatal(const char *format, const char *function = "functionName", ...)`
-- `setPrintLevel(LogLevel logLevel)` and `setSaveLevel(LogLevel logLevel)`: set the log level for printing and saving respectively. The log level can be one of the following (The default log level is **INFO**, and the default save level is WARNING): 
-  - `LogLevel::VERBOSE` 
+- `setPrintLevel(LogLevel logLevel)` and `setSaveLevel(LogLevel logLevel)`: set the log level for printing and saving respectively. The log level can be one of the following (The default log level is **INFO**, and the default save level is WARNING):
+  - `LogLevel::VERBOSE`
   - `LogLevel::DEBUG`
   - `LogLevel::INFO`
-  - `LogLevel::WARNING` 
-  - `LogLevel::ERROR` 
-  - `LogLevel::FATAL` 
+  - `LogLevel::WARNING`
+  - `LogLevel::ERROR`
+  - `LogLevel::FATAL`
 - `getPrintLevel()` and `getSaveLevel()`: get the log level for printing and saving respectively, as a LogLevel enum. To be used in conjunction with the `logLevelToString` method.
 - `logLevelToString(LogLevel logLevel, bool trim = true)`: convert a log level from the LogLevel enum to a String.
 - `setMaxLogLines(int maxLogLines)`: set the maximum number of log lines. The default value is 1000.
 - `getLogLines()`: get the number of log lines.
+- `clearLogKeepLatestXPercent(int percentage)`: clear the log, keeping the latest X percent of the logs. By default, it keeps the latest 10% of the logs.
 - `clearLog()`: clear the log.
 - `dump(Stream& stream)`: dump the log to a stream, such as the Serial or an opened file.
 - `setDefaultConfig()`: set the default configuration.
@@ -87,11 +96,13 @@ The library provides the following public methods:
 For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.ino) and [basicServer](examples/basicServer/basicServer.ino) in the examples folder.
 
 ## Contributing
+
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**. If you'd like to contribute, please fork the repository and use a feature branch. Pull requests are warmly welcome.
 
-For more information regarding the necessity of this library, see the [WHY.md](WHY.md) file. 
+For more information regarding the necessity of this library, see the [WHY.md](WHY.md) file.
 
 ### What's next?
+
 - [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.

@@ -212,7 +212,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
         _save(_messageFormatted);
         if (_logLines >= _maxLogLines)
         {
-            clearLog();
+            clearLogKeepLatestXPercent();
         }
     }
 }
@@ -262,7 +262,7 @@ void AdvancedLogger::_logPrint(const char *format, const char *function, LogLeve
 */
 void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 {
-    debug("Setting print level to %s", logLevelToString(logLevel).c_str(), "AdvancedLogger::setPrintLevel");
+    debug("Setting print level to %s", "AdvancedLogger::setPrintLevel", logLevelToString(logLevel).c_str());
     _printLevel = logLevel;
     _saveConfigToSpiffs();
 }
@@ -276,7 +276,7 @@ void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 */
 void AdvancedLogger::setSaveLevel(LogLevel logLevel)
 {
-    debug("Setting save level to %s", logLevelToString(logLevel).c_str(), "AdvancedLogger::setSaveLevel");
+    debug("Setting save level to %s", "AdvancedLogger::setSaveLevel", logLevelToString(logLevel).c_str());
     _saveLevel = logLevel;
     _saveConfigToSpiffs();
 }
@@ -456,6 +456,54 @@ void AdvancedLogger::clearLog()
     _logLines = 0;
     _logPrint("Log cleared", "AdvancedLogger::clearLog", LogLevel::INFO);
 }
+
+/**
+ * @brief Clears the log but keeps the latest X percent of log entries.
+ *
+ * This method clears the log file but retains the latest X percent of log entries.
+ * The default value is 10%.
+ */
+void AdvancedLogger::clearLogKeepLatestXPercent(int percent = 10)
+{
+    File _file = SPIFFS.open(_logFilePath, "r");
+    if (!_file)
+    {
+        LOG_E("Failed to open log file for reading");
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
+        return;
+    }
+
+    std::vector<std::string> lines;
+    while (_file.available())
+    {
+        String line = _file.readStringUntil('\n');
+        lines.push_back(line.c_str());
+    }
+    _file.close();
+
+    size_t totalLines = lines.size();
+    percent = min(max(percent, 0), 100);
+    size_t linesToKeep = totalLines / 100 * percent;
+
+    _file = SPIFFS.open(_logFilePath, "w");
+    if (!_file)
+    {
+        LOG_E("Failed to open log file for writing");
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
+        return;
+    }
+
+    for (size_t i = totalLines - linesToKeep; i < totalLines; ++i)
+    {
+        _file.print(lines[i].c_str());
+    }
+    _file.close();
+
+    _logLines = linesToKeep;
+    _logPrint("Log cleared but kept the latest 10%", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::INFO);
+}
+
+// ...
 
 /**
  * @brief Saves a message to the log file.

@@ -5,9 +5,7 @@
  * advanced logging for the ESP32.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
- * Version: 1.2.0
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
@@ -20,6 +18,9 @@
 
 #include <Arduino.h>
 #include <SPIFFS.h>
+
+#include <vector>
+#include <string>
 
 #define CORE_ID xPortGetCoreID()
 #define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
@@ -36,8 +37,8 @@ enum class LogLevel : int {
     FATAL = 5
 };
 
-constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::INFO;
-constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::WARNING;
+constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
+constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
 
 constexpr int MAX_LOG_LENGTH = 1024;
 
@@ -78,6 +79,7 @@ public:
     void setMaxLogLines(int maxLogLines);
     int getLogLines();
     void clearLog();
+    void clearLogKeepLatestXPercent(int percent);
 
     void dump(Stream& stream);
 

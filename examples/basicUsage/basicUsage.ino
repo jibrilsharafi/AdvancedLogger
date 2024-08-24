@@ -5,7 +5,7 @@
  *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Created: 21/03/2024
- * Last modified: 22/05/2024
+ * Last modified: 24/08/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -139,7 +139,9 @@ void loop()
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
         // Clear the log and set the default configuration
-        logger.clearLog();
+        logger.clearLogKeepLatestXPercent(50);
+        // If you want to clear the log without keeping the latest X percent of the log, use:
+        // logger.clearLog();
         logger.setDefaultConfig();
 
         logger.info("Log cleared and default configuration set!", "basicUsage::loop");
