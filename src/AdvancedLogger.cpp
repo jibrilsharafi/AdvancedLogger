@@ -212,7 +212,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
         _save(_messageFormatted);
         if (_logLines >= _maxLogLines)
         {
-            clearLog();
+            clearLogKeepLatest10Percent();
         }
     }
 }
@@ -456,6 +456,52 @@ void AdvancedLogger::clearLog()
     _logLines = 0;
     _logPrint("Log cleared", "AdvancedLogger::clearLog", LogLevel::INFO);
 }
+
+/**
+ * @brief Clears the log but keeps the latest 10% of the entries.
+ *
+ * This method clears the log file but retains the latest 10% of the log entries.
+ */
+void AdvancedLogger::clearLogKeepLatest10Percent()
+{
+    File _file = SPIFFS.open(_logFilePath, "r");
+    if (!_file)
+    {
+        LOG_E("Failed to open log file for reading");
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatest10Percent", LogLevel::ERROR);
+        return;
+    }
+
+    std::vector<std::string> lines;
+    while (_file.available())
+    {
+        String line = _file.readStringUntil('\n');
+        lines.push_back(line.c_str());
+    }
+    _file.close();
+
+    size_t totalLines = lines.size();
+    size_t linesToKeep = totalLines / 10; // 10% of the total lines
+
+    _file = SPIFFS.open(_logFilePath, "w");
+    if (!_file)
+    {
+        LOG_E("Failed to open log file for writing");
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatest10Percent", LogLevel::ERROR);
+        return;
+    }
+
+    for (size_t i = totalLines - linesToKeep; i < totalLines; ++i)
+    {
+        _file.println(lines[i].c_str());
+    }
+    _file.close();
+
+    _logLines = linesToKeep;
+    _logPrint("Log cleared but kept the latest 10%", "AdvancedLogger::clearLogKeepLatest10Percent", LogLevel::INFO);
+}
+
+// ...
 
 /**
  * @brief Saves a message to the log file.

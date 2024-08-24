@@ -21,6 +21,9 @@
 #include <Arduino.h>
 #include <SPIFFS.h>
 
+#include <vector>
+#include <string>
+
 #define CORE_ID xPortGetCoreID()
 #define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
 #define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
@@ -78,6 +81,7 @@ public:
     void setMaxLogLines(int maxLogLines);
     int getLogLines();
     void clearLog();
+    void clearLogKeepLatest10Percent();
 
     void dump(Stream& stream);
 
