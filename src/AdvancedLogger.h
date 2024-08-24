@@ -5,9 +5,7 @@
  * advanced logging for the ESP32.
  *
  * Author: Jibril Sharafi, @jibrilsharafi
- * Date: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
- * Version: 1.2.0
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
