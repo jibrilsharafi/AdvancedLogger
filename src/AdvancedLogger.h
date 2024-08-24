@@ -79,7 +79,7 @@ public:
     void setMaxLogLines(int maxLogLines);
     int getLogLines();
     void clearLog();
-    void clearLogKeepLatest10Percent();
+    void clearLogKeepLatestXPercent(int percent);
 
     void dump(Stream& stream);
 

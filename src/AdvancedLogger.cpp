@@ -212,7 +212,7 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
         _save(_messageFormatted);
         if (_logLines >= _maxLogLines)
         {
-            clearLogKeepLatest10Percent();
+            clearLogKeepLatestXPercent();
         }
     }
 }
@@ -458,17 +458,18 @@ void AdvancedLogger::clearLog()
 }
 
 /**
- * @brief Clears the log but keeps the latest 10% of the entries.
+ * @brief Clears the log but keeps the latest X percent of log entries.
  *
- * This method clears the log file but retains the latest 10% of the log entries.
+ * This method clears the log file but retains the latest X percent of log entries.
+ * The default value is 10%.
  */
-void AdvancedLogger::clearLogKeepLatest10Percent()
+void AdvancedLogger::clearLogKeepLatestXPercent(int percent = 10)
 {
     File _file = SPIFFS.open(_logFilePath, "r");
     if (!_file)
     {
         LOG_E("Failed to open log file for reading");
-        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatest10Percent", LogLevel::ERROR);
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
         return;
     }
 
@@ -481,24 +482,25 @@ void AdvancedLogger::clearLogKeepLatest10Percent()
     _file.close();
 
     size_t totalLines = lines.size();
-    size_t linesToKeep = totalLines / 10; // 10% of the total lines
+    percent = min(max(percent, 0), 100);
+    size_t linesToKeep = totalLines / 100 * percent;
 
     _file = SPIFFS.open(_logFilePath, "w");
     if (!_file)
     {
         LOG_E("Failed to open log file for writing");
-        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatest10Percent", LogLevel::ERROR);
+        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
         return;
     }
 
     for (size_t i = totalLines - linesToKeep; i < totalLines; ++i)
     {
-        _file.println(lines[i].c_str());
+        _file.print(lines[i].c_str());
     }
     _file.close();
 
     _logLines = linesToKeep;
-    _logPrint("Log cleared but kept the latest 10%", "AdvancedLogger::clearLogKeepLatest10Percent", LogLevel::INFO);
+    _logPrint("Log cleared but kept the latest 10%", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::INFO);
 }
 
 // ...
