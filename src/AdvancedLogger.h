@@ -20,7 +20,6 @@
 #include <SPIFFS.h>
 
 #include <vector>
-#include <string>
 
 #define CORE_ID xPortGetCoreID()
 #define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
@@ -29,12 +28,12 @@
 #define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
 
 enum class LogLevel : int {
-    VERBOSE = 0,
-    DEBUG = 1,
-    INFO = 2,
-    WARNING = 3,
-    ERROR = 4,
-    FATAL = 5
+    VERBOSE,
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR,
+    FATAL
 };
 
 constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
@@ -46,18 +45,29 @@ constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
 constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
 
 constexpr int DEFAULT_MAX_LOG_LINES = 1000;
+constexpr int MAX_WHILE_LOOP_COUNT = 10000;
 
 constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
 
 constexpr const char* LOG_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
+using LogCallback = std::function<void(
+    const char* timestamp,
+    unsigned long millisEsp,
+    const char* level, 
+    unsigned int coreId,
+    const char* function,
+    const char* message
+)>;
+     
+
 class AdvancedLogger
 {
 public:
     AdvancedLogger(
-        const char *logFilePath,
-        const char *configFilePath,
-        const char *timestampFormat);
+        const char *logFilePath = DEFAULT_LOG_PATH,
+        const char *configFilePath = DEFAULT_CONFIG_PATH,
+        const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
 
     void begin();
 
@@ -83,7 +93,33 @@ public:
 
     void dump(Stream& stream);
 
-    String logLevelToString(LogLevel logLevel, bool trim = true);
+    static const char* logLevelToString(LogLevel level, bool trim = true) {
+        switch (level) {
+            case LogLevel::VERBOSE: return trim ? "VERBOSE" : "VERBOSE ";
+            case LogLevel::DEBUG:   return trim ? "DEBUG"   : "DEBUG   ";
+            case LogLevel::INFO:    return trim ? "INFO"    : "INFO    ";
+            case LogLevel::WARNING: return trim ? "WARNING" : "WARNING ";
+            case LogLevel::ERROR:   return trim ? "ERROR"   : "ERROR   ";
+            case LogLevel::FATAL:   return trim ? "FATAL"   : "FATAL   ";
+            default:               return "UNKNOWN";
+        }
+    }
+
+    static const char* logLevelToStringLower(LogLevel level) {
+        switch (level) {
+            case LogLevel::VERBOSE: return "verbose";
+            case LogLevel::DEBUG:   return "debug";
+            case LogLevel::INFO:    return "info";
+            case LogLevel::WARNING: return "warning";
+            case LogLevel::ERROR:   return "error";
+            case LogLevel::FATAL:   return "fatal";
+            default:               return "unknown";
+        }
+    }
+
+    void setCallback(LogCallback callback) {
+        _callback = callback;
+    }
 
 private:
     String _logFilePath = DEFAULT_LOG_PATH;
@@ -111,7 +147,9 @@ private:
     bool _isValidPath(const char *path);
     bool _isValidTimestampFormat(const char *format);
 
-    std::string _formatMillis(unsigned long millis);
+    String _formatMillis(unsigned long millis);
+
+    LogCallback _callback = nullptr;
 };
 
 #endif

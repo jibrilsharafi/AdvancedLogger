@@ -12,7 +12,7 @@
 
 [![BuyMeACoffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/jibrilsharafi)
 
-A **simple** logging library capable of **saving logs to memory** and with a **comprehensive format** capable of including all the accessory information to each message.
+A **simple** logging library capable of **saving logs to memory** and with a **comprehensive format** capable of including all the accessory information to each message. Easily integrated into any project, the **callback function** allows for a wide range of applications, from sending logs to a server to displaying them on a screen.
 
 ## Installing
 
@@ -31,6 +31,7 @@ Alternatively, the library can be installed manually by downloading the latest r
 The library so far has been successfully tested on the following microcontrollers:
 
 - ESP32S3
+- ESP-WROVER
 
 ## Usage
 
@@ -92,6 +93,15 @@ The library provides the following public methods:
 - `clearLog()`: clear the log.
 - `dump(Stream& stream)`: dump the log to a stream, such as the Serial or an opened file.
 - `setDefaultConfig()`: set the default configuration.
+- `setCallback(LogCallback callback)`: Register a callback function that will be called whenever a log message is generated. The callback receives the following parameters:
+  - `timestamp`: Current formatted timestamp
+  - `millisEsp`: System uptime in milliseconds
+  - `level`: Log level as a lowercase string
+  - `coreId`: The core ID that generated the log
+  - `function`: Name of the function that generated the log
+  - `message`: The actual log message
+
+Example of using the callback:
 
 For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.ino) and [basicServer](examples/basicServer/basicServer.ino) in the examples folder.
 
@@ -104,11 +114,11 @@ For more information regarding the necessity of this library, see the [WHY.md](W
 ### What's next?
 
 - [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
-- [ ] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
+- [x] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library. Some effort has been made in this direction, but the nested folder approach gave some problems.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility. The *ESP8266* has been tested, but full compatibility has not been achieved yet.
-- [ ] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
+- [x] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
 - [x] **Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.
 - [ ] **Buffered logging**: the ability to buffer the logs and send them in chunks would be a great addition, as it would allow to save power and reduce the number of writes to the memory. This has been tested, but the results did not show any significant improvement in speed.
 - [x] **New APIs**: the logging APIs should be updated to be more consistent with the usual logging APIs, such as log.debug(...), log.info(...), log.error(...), etc.
