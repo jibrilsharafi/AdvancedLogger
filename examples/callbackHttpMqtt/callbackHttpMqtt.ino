@@ -30,14 +30,19 @@
 
 #include "AdvancedLogger.h"
 
-const String serverEndpoint = "YOUR_IP";
+// HTTP configuration
+const String serverEndpoint = "YOUR_IP"; // **** CHANGE THIS TO YOUR SERVER ****
 HTTPClient http;
 
-// Add after existing constants
-const char* mqttServer = "192.168.1.222";  // Change to your MQTT broker IP
+// MQTT configuration
+const char* mqttServer = "YOUR_BROKER"; // **** CHANGE THIS TO YOUR BROKER ****
 const unsigned int mqttPort = 1883;
-const char* mainTopic = "energyme/home";
+const char* mainTopic = "advancedlogger/log";
 const unsigned int bufferSize = 1024;
+
+// **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
+const char *ssid = "SSID";
+const char *password = "PASSWORD";
 
 const char *customLogPath = "/customPath/log.txt";
 const char *customConfigPath = "/customPath/config.txt";
@@ -53,10 +58,6 @@ const char *ntpServer1 = "pool.ntp.org";
 const char *ntpServer2 = "time.nist.gov";
 const char *ntpServer3 = "time.windows.com";
 
-// **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
-const char *ssid = "SSID";
-const char *password = "PASSWORD";
-
 unsigned long lastMillisLogClear = 0;
 unsigned long intervalLogClear = 60000;
 unsigned int maxLogLines = 100; // Low value for testing purposes
@@ -65,7 +66,7 @@ unsigned int maxLogLines = 100; // Low value for testing purposes
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-// Modified callback function
+// Modified callback function to make the JSON in the callback faster
 char jsonBuffer[512];  // Pre-allocated buffer
 String cachedDeviceId;
 String cachedTopicPrefix;
@@ -75,6 +76,21 @@ String getDeviceId() {
     return String((uint32_t)ESP.getEfuseMac(), HEX);
 }
 
+/*
+This callback function will be called by the AdvancedLogger
+whenever a log is generated. It will pass the log information,
+then the function will decide what to do with it (eg. based on
+the level, it may decide to send it to an HTTP endpoint or to 
+set a flag).
+
+In this example, the function will:
+- Format the log as JSON
+- Send the log to an HTTP endpoint
+- Publish the log to an MQTT topic
+
+The function will also measure the time taken to format the JSON,
+send the HTTP request, and publish the MQTT message.
+*/
 void callback(
     const char* timestamp,
     unsigned long millisEsp,
@@ -136,7 +152,6 @@ void callback(
         jsonTime, httpTime, mqttTime);
 }
 
-// Add MQTT reconnect function
 void reconnectMQTT() {
     while (!mqttClient.connected()) {
         String clientId = "ESP32Client-" + getDeviceId();
@@ -162,7 +177,6 @@ void setup()
     logger.begin();
     logger.setMaxLogLines(maxLogLines);
     logger.setCallback(callback);
-    logger.setSaveLevel(LogLevel::INFO);
 
     logger.debug("AdvancedLogger setup done!", "basicServer::setup");
     
@@ -180,7 +194,7 @@ void setup()
     logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), "basicServer::setup");
 
     mqttClient.setServer(mqttServer, mqttPort);
-    mqttClient.setBufferSize(bufferSize);
+    mqttClient.setBufferSize(bufferSize); // Raise the buffer size as the standard one is only 256 bytes
     reconnectMQTT();
 
     configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
@@ -197,7 +211,7 @@ void loop()
     }
     mqttClient.loop();
 
-    // Test a burst of messages
+    // Test a burst of messages to see the performance
     for (int i = 0; i < 10; i++) {
         logger.verbose("[BURST] This is a verbose message", "basicServer::loop");
         logger.debug("[BURST] This is a debug message!", "basicServer::loop");
@@ -208,24 +222,15 @@ void loop()
     }
 
     logger.debug("This is a debug message!", "basicServer::loop");
-    delay(100);
+    delay(500);
     logger.info("This is an info message!!", "basicServer::loop");
-    delay(100);
+    delay(500);
     logger.warning("This is a warning message!!!", "basicServer::loop");
-    delay(100);
+    delay(500);
     logger.error("This is a error message!!!!", "basicServer::loop");
-    delay(100);
+    delay(500);
     logger.fatal("This is a fatal message!!!!!", "basicServer::loop");
-    delay(100);
+    delay(500);
     logger.info("This is an info message!!", "basicServer::loop", true);
-    delay(500);;
-
-    if (millis() - lastMillisLogClear > intervalLogClear)
-    {
-        logger.info("Current number of log lines: %d", "basicServer::loop", logger.getLogLines());
-        logger.clearLog();
-        logger.warning("Log cleared!", "basicServer::loop");
-
-        lastMillisLogClear = millis();
-    }
+    delay(1000);
 }

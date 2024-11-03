@@ -206,10 +206,6 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
     if (logLevel >= _saveLevel)
     {
         _save(_messageFormatted);
-        if (_logLines >= _maxLogLines)
-        {
-            clearLogKeepLatestXPercent();
-        }
     }
 
     if (_callback) {
@@ -470,49 +466,57 @@ void AdvancedLogger::clearLog()
  * This method clears the log file but retains the latest X percent of log entries.
  * The default value is 10%.
  */
-void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
+void AdvancedLogger::clearLogKeepLatestXPercent(int percent) 
 {
-    File _file = SPIFFS.open(_logFilePath, "r");
-    if (!_file)
-    {
-        Serial.printf("Failed to open log file for reading");
-        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
+    File sourceFile = SPIFFS.open(_logFilePath, "r");
+    if (!sourceFile) {
+        _logPrint("Failed to open source file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
         return;
     }
 
-    std::vector<String> lines;
-    int _loopCount = 0;
-    while (_file.available() && _loopCount < MAX_WHILE_LOOP_COUNT)
-    {
-        _loopCount++;
-        String line = _file.readStringUntil('\n');
-        lines.push_back(line.c_str());
+    // Count lines first
+    size_t totalLines = 0;
+    while (sourceFile.available() && totalLines < MAX_WHILE_LOOP_COUNT) {
+        if (sourceFile.readStringUntil('\n').length() > 0) totalLines++;
     }
-    _file.close();
+    sourceFile.seek(0);
 
-    size_t totalLines = lines.size();
+    // Calculate lines to keep/skip
     percent = min(max(percent, 0), 100);
-    size_t linesToKeep = totalLines / 100 * percent;
+    size_t linesToKeep = (totalLines * percent) / 100;
+    size_t linesToSkip = totalLines - linesToKeep;
 
-    _file = SPIFFS.open(_logFilePath, "w");
-    if (!_file)
-    {
-        Serial.printf("Failed to open log file for writing");
-        _logPrint("Failed to open log file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
+    File tempFile = SPIFFS.open(_logFilePath + ".tmp", "w");
+    if (!tempFile) {
+        _logPrint("Failed to create temp file", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::ERROR);
+        sourceFile.close();
         return;
     }
 
-    for (size_t i = totalLines - linesToKeep; i < totalLines; ++i)
-    {
-        _file.print(lines[i].c_str());
+    // Skip lines by reading
+    for (size_t i = 0; i < linesToSkip && sourceFile.available(); i++) {
+        sourceFile.readStringUntil('\n');
     }
-    _file.close();
+
+    // Direct copy of remaining lines
+    int _loopCount = 0;
+    while (sourceFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT) {
+        String line = sourceFile.readStringUntil('\n');
+        if (line.length() > 0) {
+            tempFile.print(line);
+        }
+    }
+
+    sourceFile.close();
+    tempFile.close();
+
+    SPIFFS.remove(_logFilePath);
+    SPIFFS.rename(_logFilePath + ".tmp", _logFilePath);
 
     _logLines = linesToKeep;
-    _logPrint("Log cleared but kept the latest 10%", "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::INFO);
+    _logPrint("Log cleared keeping latest entries", 
+              "AdvancedLogger::clearLogKeepLatestXPercent", LogLevel::INFO);
 }
-
-// ...
 
 /**
  * @brief Saves a message to the log file.
@@ -536,6 +540,8 @@ void AdvancedLogger::_save(const char *messageFormatted)
         _file.close();
         _logLines++;
     }
+    
+    if (_logLines >= _maxLogLines) clearLogKeepLatestXPercent();
 }
 
 /**
