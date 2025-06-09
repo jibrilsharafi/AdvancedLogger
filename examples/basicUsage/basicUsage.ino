@@ -55,6 +55,8 @@ const char *logDumpPath = "/logDump.txt";
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
 
+static const char* TAG = "main";
+
 void setup()
 {
     // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
@@ -76,30 +78,30 @@ void setup()
     // Set the maximum number of log lines before the log is cleared (optional)
     logger.setMaxLogLines(maxLogLines);
 
-    logger.debug("AdvancedLogger setup done!", "basicUsage::setup");
+    logger.debug("AdvancedLogger setup done!", TAG);
    
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
 
-    logger.info("Setup done!", "basicUsage::setup");
+    logger.info("Setup done!", TAG);
 }
 
 void loop()
 {
-    logger.verbose("This is a verbose message", "basicUsage::loop");
+    logger.verbose("This is a verbose message", TAG);
     delay(500);
-    logger.debug("This is a debug message!", "basicUsage::loop");
+    logger.debug("This is a debug message!", TAG);
     delay(500);
-    logger.info("This is an info message!!", "basicUsage::loop");
+    logger.info("This is an info message!!", TAG);
     delay(500);
-    logger.warning("This is a warning message!!!", "basicUsage::loop");
+    logger.warning("This is a warning message!!!", TAG);
     delay(500);
-    logger.error("This is a error message!!!!", "basicUsage::loop");
+    logger.error("This is a error message!!!!", TAG);
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", "basicUsage::loop");
+    logger.fatal("This is a fatal message!!!!!", TAG);
     delay(500);
 
-    logger.info("Testing printf functionality: %d, %f, %s", "basicUsage::loop", 1, 2.0, "three");
+    logger.info("Testing printf functionality: %d, %f, %s", TAG, 1, 2.0, "three");
     delay(500);
     
     // Get the current print and save levels
@@ -109,29 +111,29 @@ void loop()
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
         // Print the current number of log lines
-        logger.info("Current number of log lines: %d", "basicUsage::loop", logger.getLogLines());
+        logger.info("Current number of log lines: %d", TAG, logger.getLogLines());
 
         // Dump the log to Serial
-        logger.info("Dumping log to Serial...", "basicUsage::loop");
+        logger.info("Dumping log to Serial...", TAG);
         logger.dump(Serial);
-        logger.info("Log dumped!", "basicUsage::loop");
+        logger.info("Log dumped!", TAG);
 
         // Dump the log to another file
-        logger.info("Dumping log to file...", "basicUsage::loop");
+        logger.info("Dumping log to file...", TAG);
         File tempFile = SPIFFS.open(logDumpPath, "w");
         logger.dump(tempFile);
         tempFile.close();
-        logger.info("Log dumped!", "basicUsage::loop");
+        logger.info("Log dumped!", TAG);
 
         // Ensure the log has been dumped correctly
-        logger.info("Printing the temporary log dump file...", "basicUsage::loop");
+        logger.info("Printing the temporary log dump file...", TAG);
         tempFile = SPIFFS.open(logDumpPath, "r");
         while (tempFile.available())
         {
             Serial.write(tempFile.read());
         }
         tempFile.close();
-        logger.info("Log dump file printed!", "basicUsage::loop");
+        logger.info("Log dump file printed!", TAG);
 
         lastMillisLogDump = millis();
     }
@@ -144,7 +146,7 @@ void loop()
         // logger.clearLog();
         logger.setDefaultConfig();
 
-        logger.info("Log cleared and default configuration set!", "basicUsage::loop");
+        logger.info("Log cleared and default configuration set!", TAG);
 
         lastMillisLogClear = millis();
     }

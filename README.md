@@ -93,6 +93,15 @@ The library provides the following public methods:
 - `clearLog()`: clear the log.
 - `dump(Stream& stream)`: dump the log to a stream, such as the Serial or an opened file.
 - `setDefaultConfig()`: set the default configuration.
+- **Log Counters** - Track the number of logs generated for each level:
+  - `getVerboseCount()`: get the number of verbose level logs recorded.
+  - `getDebugCount()`: get the number of debug level logs recorded.
+  - `getInfoCount()`: get the number of info level logs recorded.
+  - `getWarningCount()`: get the number of warning level logs recorded.
+  - `getErrorCount()`: get the number of error level logs recorded.
+  - `getFatalCount()`: get the number of fatal level logs recorded.
+  - `getTotalLogCount()`: get the total number of logs recorded across all levels.
+  - `resetLogCounters()`: reset all log level counters to zero.
 - `setCallback(LogCallback callback)`: Register a callback function that will be called whenever a log message is generated. The callback receives the following parameters:
   - `timestamp`: Current formatted timestamp
   - `millisEsp`: System uptime in milliseconds

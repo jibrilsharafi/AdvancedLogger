@@ -25,6 +25,14 @@ setMaxLogLines  KEYWORD2
 getLogLines     KEYWORD2
 clearLog        KEYWORD2
 dumpToSerial    KEYWORD2
+getVerboseCount KEYWORD2
+getDebugCount   KEYWORD2
+getInfoCount    KEYWORD2
+getWarningCount KEYWORD2
+getErrorCount   KEYWORD2
+getFatalCount   KEYWORD2
+getTotalLogCount KEYWORD2
+resetLogCounters KEYWORD2
 
 ####################################################################################################
 # AdvancedLogger constants
