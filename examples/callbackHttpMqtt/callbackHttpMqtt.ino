@@ -37,7 +37,7 @@ HTTPClient http;
 // MQTT configuration
 const char* mqttServer = "YOUR_BROKER"; // **** CHANGE THIS TO YOUR BROKER ****
 const unsigned int mqttPort = 1883;
-const char* mainTopic = "advancedlogger/log";
+const char* mainTopic = "advancedlogger"; // To see the messages, subscribe to "advancedlogger/+/log/+"
 const unsigned int bufferSize = 1024;
 
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
@@ -75,6 +75,8 @@ String cachedTopicPrefix;
 String getDeviceId() {
     return String((uint32_t)ESP.getEfuseMac(), HEX);
 }
+
+static const char* TAG = "main";
 
 /*
 This callback function will be called by the AdvancedLogger
@@ -156,9 +158,9 @@ void reconnectMQTT() {
     while (!mqttClient.connected()) {
         String clientId = "ESP32Client-" + getDeviceId();
         if (mqttClient.connect(clientId.c_str())) {
-            logger.info("MQTT Connected", "reconnectMQTT");
+            logger.info("MQTT Connected with client ID: %s", TAG, clientId.c_str());
         } else {
-            logger.error("MQTT Connection failed, rc=%d", "reconnectMQTT", mqttClient.state());
+            logger.error("MQTT Connection failed, rc=%d", TAG, mqttClient.state());
         }
     }
 }
@@ -178,7 +180,7 @@ void setup()
     logger.setMaxLogLines(maxLogLines);
     logger.setCallback(callback);
 
-    logger.debug("AdvancedLogger setup done!", "basicServer::setup");
+    logger.debug("AdvancedLogger setup done!", TAG);
     
     // Connect to WiFi
     // --------------------
@@ -188,10 +190,11 @@ void setup()
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(1000);
-        logger.info("Connecting to WiFi... SSID: %s | Password: %s", "basicServer::setup", ssid, password);
+        logger.info("Connecting to WiFi... SSID: %s | Password: %s", TAG, ssid, password);
     }
     
-    logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), "basicServer::setup");
+    logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), TAG);
+    logger.info("Device ID: %s", TAG, getDeviceId().c_str());
 
     mqttClient.setServer(mqttServer, mqttPort);
     mqttClient.setBufferSize(bufferSize); // Raise the buffer size as the standard one is only 256 bytes
@@ -199,9 +202,9 @@ void setup()
 
     configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
     
-    logger.info("Server started!", "basicServer::setup");
+    logger.info("Server started!", TAG);
 
-    logger.info("Setup done!", "basicServer::setup");
+    logger.info("Setup done!", TAG);
 }
 
 void loop()
@@ -213,24 +216,24 @@ void loop()
 
     // Test a burst of messages to see the performance
     for (int i = 0; i < 10; i++) {
-        logger.verbose("[BURST] This is a verbose message", "basicServer::loop");
-        logger.debug("[BURST] This is a debug message!", "basicServer::loop");
-        logger.info("[BURST] This is an info message!!", "basicServer::loop");
-        logger.warning("[BURST] This is a warning message!!!", "basicServer::loop");
-        logger.error("[BURST] This is a error message!!!!", "basicServer::loop");
-        logger.fatal("[BURST] This is a fatal message!!!!!", "basicServer::loop");
+        logger.verbose("[BURST] This is a verbose message", TAG);
+        logger.debug("[BURST] This is a debug message!", TAG);
+        logger.info("[BURST] This is an info message!!", TAG);
+        logger.warning("[BURST] This is a warning message!!!", TAG);
+        logger.error("[BURST] This is a error message!!!!", TAG);
+        logger.fatal("[BURST] This is a fatal message!!!!!", TAG);
     }
 
-    logger.debug("This is a debug message!", "basicServer::loop");
+    logger.debug("This is a debug message!", TAG);
     delay(500);
-    logger.info("This is an info message!!", "basicServer::loop");
+    logger.info("This is an info message!!", TAG);
     delay(500);
-    logger.warning("This is a warning message!!!", "basicServer::loop");
+    logger.warning("This is a warning message!!!", TAG);
     delay(500);
-    logger.error("This is a error message!!!!", "basicServer::loop");
+    logger.error("This is a error message!!!!", TAG);
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", "basicServer::loop");
+    logger.fatal("This is a fatal message!!!!!", TAG);
     delay(500);
-    logger.info("This is an info message!!", "basicServer::loop", true);
+    logger.info("This is an info message!!", TAG, true);
     delay(1000);
 }

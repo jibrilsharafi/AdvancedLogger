@@ -60,7 +60,7 @@ using LogCallback = std::function<void(
     const char* message
 )>;
      
-
+// TODO: add better log rotation
 class AdvancedLogger
 {
 public:
@@ -70,6 +70,7 @@ public:
         const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
 
     void begin();
+    void end();
 
     void verbose(const char *format, const char *function, ...);
     void debug(const char *format, const char *function, ...);
@@ -88,10 +89,27 @@ public:
 
     void setMaxLogLines(int maxLogLines);
     int getLogLines();
+    bool _checkAndOpenLogFile();
     void clearLog();
     void clearLogKeepLatestXPercent(int percent = 10);
 
     void dump(Stream& stream);
+
+    // Get the total amount of verbose logs since boot (or last reset) regardless of print or save level
+    unsigned long getVerboseCount() { return _verboseCount; }
+    // Get the total amount of debug logs since boot (or last reset) regardless of print or save level
+    unsigned long getDebugCount() { return _debugCount; }
+    // Get the total amount of info logs since boot (or last reset) regardless of print or save level
+    unsigned long getInfoCount() { return _infoCount; }
+    // Get the total amount of warning logs since boot (or last reset) regardless of print or save level
+    unsigned long getWarningCount() { return _warningCount; }
+    // Get the total amount of error logs since boot (or last reset) regardless of print or save level
+    unsigned long getErrorCount() { return _errorCount; }
+    // Get the total amount of fatal logs since boot (or last reset) regardless of print or save level
+    unsigned long getFatalCount() { return _fatalCount; }
+    // Get the total amount of logs since boot (or last reset) regardless of print or save level
+    unsigned long getTotalLogCount() { return _verboseCount + _debugCount + _infoCount + _warningCount + _errorCount + _fatalCount; }
+    void resetLogCounters();
 
     static const char* logLevelToString(LogLevel level, bool trim = true) {
         switch (level) {
@@ -120,20 +138,33 @@ public:
     void setCallback(LogCallback callback) {
         _callback = callback;
     }
+    void removeCallback() {
+        _callback = nullptr;
+    }
 
 private:
     String _logFilePath = DEFAULT_LOG_PATH;
     String _configFilePath = DEFAULT_CONFIG_PATH;
 
     LogLevel _printLevel = DEFAULT_PRINT_LEVEL;
-    LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;
-
+    LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;    
     int _maxLogLines = DEFAULT_MAX_LOG_LINES;
     int _logLines = 0;
 
+    unsigned long _verboseCount = 0;
+    unsigned long _debugCount = 0;
+    unsigned long _infoCount = 0;
+    unsigned long _warningCount = 0;
+    unsigned long _errorCount = 0;
+    unsigned long _fatalCount = 0;
+
     void _log(const char *format, const char *function, LogLevel logLevel);
+    void _increaseLogCount(LogLevel logLevel);
     void _logPrint(const char *format, const char *function, LogLevel logLevel, ...);
+    
+    File _logFile;
     void _save(const char *messageFormatted);
+    
     bool _setConfigFromSpiffs();
     void _saveConfigToSpiffs();
 
