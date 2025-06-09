@@ -202,8 +202,6 @@ void setup()
 
     configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
     
-    logger.info("Server started!", TAG);
-
     logger.info("Setup done!", TAG);
 }
 

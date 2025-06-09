@@ -36,11 +36,11 @@ AdvancedLogger::AdvancedLogger(
             _logFilePath.c_str(),
             _configFilePath.c_str(),
             DEFAULT_LOG_PATH,
-            DEFAULT_CONFIG_PATH);
+            DEFAULT_CONFIG_PATH
+        );
 
         _logFilePath = DEFAULT_LOG_PATH;
         _configFilePath = DEFAULT_CONFIG_PATH;
-        _invalidPath = true;
     }
 
     if (!_isValidTimestampFormat(_timestampFormat))
@@ -48,10 +48,10 @@ AdvancedLogger::AdvancedLogger(
         Serial.printf(
             "Invalid timestamp format %s, using default format: %s",
             _timestampFormat,
-            DEFAULT_TIMESTAMP_FORMAT);
+            DEFAULT_TIMESTAMP_FORMAT
+        );
 
         _timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
-        _invalidTimestampFormat = true;
     }
 }
 
@@ -74,41 +74,20 @@ void AdvancedLogger::begin()
     }
     _logLines = getLogLines();
 
-    if (_invalidPath)
-    {
-        warning("Invalid path for log or config file, using default paths", TAG);
-    }
-    if (_invalidTimestampFormat)
-    {
-        warning("Invalid timestamp format, using default format", TAG);
-    }
-
     bool spiffsMounted = SPIFFS.begin(false);
     if (!spiffsMounted) {
         Serial.printf("Failed to mount SPIFFS. Please mount it before using AdvancedLogger.");
         error("SPIFFS mount failed", TAG);
         return;
-    }
-
-    bool isLogFileOpen = _checkAndOpenLogFile();
+    }    
+    
+    bool isLogFileOpen = _checkAndOpenLogFile(FileMode::APPEND);
     if (!isLogFileOpen) {
         Serial.printf("Failed to open log file %s", _logFilePath.c_str());
         error("Log file opening failed", TAG);
         return;
-    }
-
-    _logFile = SPIFFS.open(_logFilePath, "a+");
-    if (_logFile) {
-        debug("AdvancedLogger initialized", TAG);
     } else {
-        _logFile = SPIFFS.open(DEFAULT_LOG_PATH, "a+");
-        if (!_logFile) {
-            Serial.printf("Failed to open default log file %s", DEFAULT_LOG_PATH);
-            error("AdvancedLogger initialization failed", TAG);
-            return;
-        }
-        Serial.printf("Log file %s opened successfully", _logFilePath.c_str());
-        warning("AdvancedLogger initialized", TAG);
+        debug("AdvancedLogger initialized", TAG);
     }
 }
 
@@ -121,8 +100,8 @@ void AdvancedLogger::begin()
 void AdvancedLogger::end()
 {
     if (_logFile) {
-        _logFile.close();
-        debug("AdvancedLogger ended", TAG);
+        info("AdvancedLogger ended", TAG);
+        _closeLogFile();
     } else {
         warning("AdvancedLogger end called but log file was not open", TAG);
     }
@@ -507,7 +486,7 @@ void AdvancedLogger::setMaxLogLines(int maxLogLines)
 */
 int AdvancedLogger::getLogLines()
 {
-    if (!_checkAndOpenLogFile()) return 0;
+    if (!_checkAndOpenLogFile(FileMode::READ)) return 0;
 
     int lines = 0;
     int _loopCount = 0;
@@ -519,23 +498,23 @@ int AdvancedLogger::getLogLines()
             lines++;
         }
     }
-    _logFile.close();
     return lines;
 }
 
-bool AdvancedLogger::_checkAndOpenLogFile()
+bool AdvancedLogger::_checkAndOpenLogFile(FileMode mode)
 {
-    if (!_logFile)
-    {
-        _logFile = SPIFFS.open(_logFilePath, "r");
-        if (!_logFile)
-        {
-            Serial.printf("Failed to open log file for reading");
-            _logPrint("Failed to open log file", TAG, LogLevel::ERROR);
-            return false;
-        }
+    // If file is already open with the correct mode, return true
+    if (_logFile && _currentFileMode == mode) {
+        return true;
     }
-    return true;
+    
+    // If file is open but with wrong mode, close and reopen
+    if (_logFile && _currentFileMode != mode) {
+        _closeLogFile();
+    }
+    
+    // Open file with requested mode
+    return _reopenLogFile(mode);
 }
 
 /**
@@ -545,10 +524,10 @@ bool AdvancedLogger::_checkAndOpenLogFile()
 */
 void AdvancedLogger::clearLog()
 {
-    if (!_checkAndOpenLogFile()) return;
+    if (!_checkAndOpenLogFile(FileMode::WRITE)) return;
 
-    _logFile.print("");
-    _logFile.close();
+    // File is truncated when opened in "w" mode, so just close it
+    _closeLogFile();
     _logLines = 0;
     _logPrint("Log cleared", TAG, LogLevel::INFO);
 }
@@ -561,14 +540,16 @@ void AdvancedLogger::clearLog()
  */
 void AdvancedLogger::clearLogKeepLatestXPercent(int percent) 
 {
-    if (!_checkAndOpenLogFile()) return;
+    if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
     // Count lines first
     size_t totalLines = 0;
     while (_logFile.available() && totalLines < MAX_WHILE_LOOP_COUNT) {
         if (_logFile.readStringUntil('\n').length() > 0) totalLines++;
     }
-    _logFile.seek(0);
+    
+    // Reopen for reading from beginning
+    if (!_reopenLogFile(FileMode::READ)) return;
 
     // Calculate lines to keep/skip
     percent = min(max(percent, 0), 100);
@@ -578,7 +559,7 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
     File tempFile = SPIFFS.open(_logFilePath + ".tmp", "w");
     if (!tempFile) {
         _logPrint("Failed to create temp file", TAG, LogLevel::ERROR);
-        _logFile.close();
+        _closeLogFile();
         return;
     }
 
@@ -592,17 +573,16 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
     while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT) {
         String line = _logFile.readStringUntil('\n');
         if (line.length() > 0) {
-            tempFile.print(line);
+            tempFile.println(line);
         }
+        _loopCount++;
     }
 
-    _logFile.close();
+    _closeLogFile();
     tempFile.close();
 
     SPIFFS.remove(_logFilePath);
     SPIFFS.rename(_logFilePath + ".tmp", _logFilePath);
-
-    _checkAndOpenLogFile();
 
     _logLines = linesToKeep;
     _logPrint("Log cleared keeping latest entries", TAG, LogLevel::INFO);
@@ -617,10 +597,10 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
 */
 void AdvancedLogger::_save(const char *messageFormatted)
 {
-    if (!_checkAndOpenLogFile()) return;
+    if (!_checkAndOpenLogFile(FileMode::APPEND)) return;
 
     _logFile.println(messageFormatted);
-    _logFile.close();
+    _logFile.flush(); // Ensure data is written to flash
     _logLines++;
 
     if (_logLines >= _maxLogLines) clearLogKeepLatestXPercent();
@@ -637,7 +617,7 @@ void AdvancedLogger::dump(Stream &stream)
 {
     debug("Dumping log to Stream...", TAG);
 
-    if (!_checkAndOpenLogFile()) return;
+    if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
     int _loopCount = 0;
     while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT)
@@ -646,7 +626,6 @@ void AdvancedLogger::dump(Stream &stream)
         stream.write(_logFile.read());
     }
     stream.flush();
-    _logFile.close();
 
     debug("Log dumped to Stream", TAG);
 }
@@ -806,4 +785,47 @@ void AdvancedLogger::resetLogCounters() {
     _warningCount = 0;
     _errorCount = 0;
     _fatalCount = 0;
+}
+
+/**
+ * @brief Converts FileMode enum to string representation
+ * @param mode FileMode enum value
+ * @return const char* String representation of the file mode
+ */
+const char* AdvancedLogger::_fileModeToString(FileMode mode)
+{
+    switch (mode) {
+        case FileMode::APPEND: return "a";
+        case FileMode::READ:   return "r";
+        case FileMode::WRITE:  return "w";
+        default:              return "a";
+    }
+}
+
+/**
+ * @brief Closes the current log file handle
+ */
+void AdvancedLogger::_closeLogFile() 
+{
+    if (_logFile) {
+        _logFile.close();
+        _currentFileMode = FileMode::APPEND; // Reset to default
+    }
+}
+
+/**
+ * @brief Reopens the log file with specified mode
+ * @param mode FileMode enum value (APPEND, READ, WRITE)
+ * @return true if successful, false otherwise
+ */
+bool AdvancedLogger::_reopenLogFile(FileMode mode) 
+{
+    _closeLogFile();
+    _logFile = SPIFFS.open(_logFilePath, _fileModeToString(mode));
+    if (_logFile) {
+        _currentFileMode = mode;
+        return true;
+    }
+    _currentFileMode = FileMode::APPEND; // Reset to default on failure
+    return false;
 }

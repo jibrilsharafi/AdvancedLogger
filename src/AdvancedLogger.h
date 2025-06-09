@@ -27,6 +27,12 @@
 #define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
 #define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
 
+enum class FileMode : int {
+    APPEND,   // "a" - append mode
+    READ,     // "r" - read mode  
+    WRITE     // "w" - write mode (truncates file)
+};
+
 enum class LogLevel : int {
     VERBOSE,
     DEBUG,
@@ -156,15 +162,18 @@ private:
     unsigned long _infoCount = 0;
     unsigned long _warningCount = 0;
     unsigned long _errorCount = 0;
-    unsigned long _fatalCount = 0;
+    unsigned long _fatalCount = 0;    
 
     void _log(const char *format, const char *function, LogLevel logLevel);
     void _increaseLogCount(LogLevel logLevel);
-    void _logPrint(const char *format, const char *function, LogLevel logLevel, ...);
+    void _logPrint(const char *format, const char *function, LogLevel logLevel, ...);    File _logFile;
     
-    File _logFile;
+    FileMode _currentFileMode = FileMode::APPEND;
+    
     void _save(const char *messageFormatted);
-    
+    void _closeLogFile();      bool _reopenLogFile(FileMode mode = FileMode::APPEND);
+    bool _checkAndOpenLogFile(FileMode mode = FileMode::APPEND);
+    const char* _fileModeToString(FileMode mode);
     bool _setConfigFromSpiffs();
     void _saveConfigToSpiffs();
 
@@ -173,8 +182,6 @@ private:
     const char *_timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
     String _getTimestamp();
     
-    bool _invalidPath = false;
-    bool _invalidTimestampFormat = false;
     bool _isValidPath(const char *path);
     bool _isValidTimestampFormat(const char *format);
 
