@@ -10,11 +10,10 @@
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
  * This library provides advanced logging capabilities for the ESP32, allowing you to log messages
- * to the console and to a file on the SPIFFS.
+ * to the console, to a file on the LittleFS, and to any callback function.
  */
 
-#ifndef ADVANCEDLOGGER_H
-#define ADVANCEDLOGGER_H
+#pragma once
 
 #include <Arduino.h>
 #include <LittleFS.h>
@@ -23,7 +22,12 @@
 
 #include <vector>
 
-#define CORE_ID xPortGetCoreID()
+// TODOs:
+// - Use defines
+// - Buffering logs for writing
+// - Use macros so that the tag does not need to be passed
+// - Global flags to remove at compile time some logs
+
 #define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
 #define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
 #define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
@@ -67,22 +71,30 @@ constexpr int MAX_LOG_MESSAGE_LENGTH = 64;     // For simple log messages
 
 constexpr const char* LOG_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
-using LogCallback = std::function<void(
-    const char* timestamp,
-    unsigned long millisEsp,
-    const char* level, 
-    unsigned int coreId,
-    const char* function,
-    const char* message
-)>;
-     
-// TODO: add better log rotation
-class AdvancedLogger
-{
-public:
-    AdvancedLogger(const char *logFilePath = DEFAULT_LOG_PATH);
+struct LogEntry {
+    char timestamp[TIMESTAMP_BUFFER_SIZE];
+    unsigned long long millis;
+    LogLevel level;
+    int coreId;
+    const char* function;
+    const char* message;
 
-    void begin();
+    LogEntry(
+        const char* ts, 
+        unsigned long long ms, 
+        LogLevel lvl, 
+        int core, 
+        const char* func, 
+        const char* msg
+    ) : millis(ms), level(lvl), coreId(core), function(func), message(msg) 
+    { snprintf(timestamp, sizeof(timestamp), "%s", ts); }
+};
+
+using LogCallback = std::function<void(const LogEntry&)>;
+
+namespace AdvancedLogger
+{
+    void begin(const char *logFilePath = DEFAULT_LOG_PATH);
     void end();
 
     void verbose(const char *format, const char *function, ...);
@@ -107,23 +119,34 @@ public:
 
     void dump(Stream& stream);
 
-    // Get the total amount of verbose logs since boot (or last reset) regardless of print or save level
-    unsigned long getVerboseCount() { return _verboseCount; }
-    // Get the total amount of debug logs since boot (or last reset) regardless of print or save level
-    unsigned long getDebugCount() { return _debugCount; }
-    // Get the total amount of info logs since boot (or last reset) regardless of print or save level
-    unsigned long getInfoCount() { return _infoCount; }
-    // Get the total amount of warning logs since boot (or last reset) regardless of print or save level
-    unsigned long getWarningCount() { return _warningCount; }
-    // Get the total amount of error logs since boot (or last reset) regardless of print or save level
-    unsigned long getErrorCount() { return _errorCount; }
-    // Get the total amount of fatal logs since boot (or last reset) regardless of print or save level
-    unsigned long getFatalCount() { return _fatalCount; }
-    // Get the total amount of logs since boot (or last reset) regardless of print or save level
-    unsigned long getTotalLogCount() { return _verboseCount + _debugCount + _infoCount + _warningCount + _errorCount + _fatalCount; }
     void resetLogCounters();
 
-    static const char* logLevelToString(LogLevel level, bool trim = true) {
+    /**
+     * @brief Sets a callback function to handle log entries.
+     *
+     * This method sets a callback function that will be called for each log entry.
+     *
+     * @param callback The callback function to handle log entries.
+     */
+    void setCallback(LogCallback callback);
+    
+    /**
+     * @brief Removes the currently set callback function.
+     *
+     * This method removes the callback function that was previously set.
+     */
+    void removeCallback();
+
+    /**
+     * @brief Converts a log level to a string representation.
+     *
+     * This method converts a log level to its string representation.
+     *
+     * @param level The log level to convert.
+     * @param trim Whether to trim the string to fit the log format.
+     * @return The string representation of the log level.
+     */
+    inline const char* logLevelToString(LogLevel level, bool trim = true) {
         switch (level) {
             case LogLevel::VERBOSE: return trim ? "VERBOSE" : "VERBOSE ";
             case LogLevel::DEBUG:   return trim ? "DEBUG"   : "DEBUG   ";
@@ -135,7 +158,15 @@ public:
         }
     }
 
-    static const char* logLevelToStringLower(LogLevel level) {
+    /**
+     * @brief Converts a log level to a lowercase string representation.
+     *
+     * This method converts a log level to its lowercase string representation.
+     *
+     * @param level The log level to convert.
+     * @return The lowercase string representation of the log level.
+     */
+    inline const char* logLevelToStringLower(LogLevel level) {
         switch (level) {
             case LogLevel::VERBOSE: return "verbose";
             case LogLevel::DEBUG:   return "debug";
@@ -147,52 +178,72 @@ public:
         }
     }
 
-    void setCallback(LogCallback callback) {
-        _callback = callback;
-    }
-    void removeCallback() {
-        _callback = nullptr;
-    }
-
-private:
-    char _logFilePath[MAX_LOG_PATH_LENGTH];
-    Preferences _preferences;
-
-    LogLevel _printLevel = DEFAULT_PRINT_LEVEL;
-    LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;    
-    int _maxLogLines = DEFAULT_MAX_LOG_LINES;
-    int _logLines = 0;
-
-    unsigned long _verboseCount = 0;
-    unsigned long _debugCount = 0;
-    unsigned long _infoCount = 0;
-    unsigned long _warningCount = 0;
-    unsigned long _errorCount = 0;
-    unsigned long _fatalCount = 0;    
-
-    void _log(const char *format, const char *function, LogLevel logLevel);
-    void _increaseLogCount(LogLevel logLevel);
-    void _logPrint(const char *format, const char *function, LogLevel logLevel, ...);    File _logFile;
+    /**
+     * @brief Gets the total amount of logs for a specific log level.
+     *
+     * This method returns the total amount of logs for the specified log level.
+     *
+     * @param logLevel Log level for which to get the count.
+     * @return unsigned long Total count of logs for the specified log level.
+     */
+    unsigned long getVerboseCount();
     
-    FileMode _currentFileMode = FileMode::APPEND;
-    
-    void _save(const char *messageFormatted);
-    void _closeLogFile();      bool _reopenLogFile(FileMode mode = FileMode::APPEND);
-    bool _checkAndOpenLogFile(FileMode mode = FileMode::APPEND);
-    const char* _fileModeToString(FileMode mode);
-    bool _setConfigFromPreferences();
-    void _saveConfigToPreferences();
+    /**
+     * @brief Gets the total amount of logs for a specific log level.
+     *
+     * This method returns the total amount of logs for the specified log level.
+     *
+     * @param logLevel Log level for which to get the count.
+     * @return unsigned long Total count of logs for the specified log level.
+     */
+    unsigned long getDebugCount();
 
-    LogLevel _charToLogLevel(const char *logLevelStr);
+    /**
+     * @brief Gets the total amount of logs for a specific log level.
+     *
+     * This method returns the total amount of logs for the specified log level.
+     *
+     * @param logLevel Log level for which to get the count.
+     * @return unsigned long Total count of logs for the specified log level.
+     */
+    unsigned long getInfoCount();
 
-    void _getTimestampIsoUtc(char* buffer, size_t bufferSize);
-    
-    bool _isValidPath(const char *path);
-    bool _ensureDirectoryExists(const char* filePath);
+    /**
+     * @brief Gets the total amount of logs for a specific log level.
+     *
+     * This method returns the total amount of logs for the specified log level.
+     *
+     * @param logLevel Log level for which to get the count.
+     * @return unsigned long Total count of logs for the specified log level.
+     */
+    unsigned long getWarningCount();
 
-    void _formatMillis(unsigned long millis, char* buffer, size_t bufferSize);
+    /**
+     * @brief Gets the total amount of logs for a specific log level.
+     *
+     * This method returns the total amount of logs for the specified log level.
+     *
+     * @param logLevel Log level for which to get the count.
+     * @return unsigned long Total count of logs for the specified log level.
+     */
+    unsigned long getErrorCount();
 
-    LogCallback _callback = nullptr;
+    /**
+     * @brief Gets the total amount of logs for a specific log level.
+     *
+     * This method returns the total amount of logs for the specified log level.
+     *
+     * @param logLevel Log level for which to get the count.
+     * @return unsigned long Total count of logs for the specified log level.
+     */
+    unsigned long getFatalCount();
+
+    /**
+     * @brief Gets the total amount of logs since boot (or last reset) regardless of print or save level.
+     *
+     * This method returns the total amount of logs since boot (or last reset) regardless of print or save level.
+     *
+     * @return unsigned long Total count of logs since boot (or last reset).
+     */
+    unsigned long getTotalLogCount();
 };
-
-#endif

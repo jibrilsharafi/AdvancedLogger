@@ -5,7 +5,6 @@
  *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Created: 21/03/2024
- * Last modified: 24/08/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -28,11 +27,6 @@
 #include "AdvancedLogger.h"
 
 const char *customLogPath = "/customPath/log.txt";
-
-AdvancedLogger logger(customLogPath);
-// If you don't want to set the custom path, you can 
-// just use the default constructor:
-// AdvancedLogger logger;
 
 // Set the custom print and save levels
 LogLevel printLevel = LogLevel::INFO;
@@ -63,71 +57,71 @@ void setup()
     }
 
     // Initialize the logger
-    logger.begin();
+    AdvancedLogger::begin(customLogPath);
     
     // Setting the print and save levels (optional)
-    logger.setPrintLevel(printLevel);
-    logger.setSaveLevel(saveLevel);
+    AdvancedLogger::setPrintLevel(printLevel);
+    AdvancedLogger::setSaveLevel(saveLevel);
 
     // Set the maximum number of log lines before the log is cleared (optional)
-    logger.setMaxLogLines(maxLogLines);
+    AdvancedLogger::setMaxLogLines(maxLogLines);
 
-    logger.debug("AdvancedLogger setup done!", TAG);
+    AdvancedLogger::debug("AdvancedLogger setup done!", TAG);
    
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
 
-    logger.info("Setup done!", TAG);
+    AdvancedLogger::info("Setup done!", TAG);
 }
 
 void loop()
 {
-    logger.verbose("This is a verbose message", TAG);
+    AdvancedLogger::verbose("This is a verbose message", TAG);
     delay(500);
-    logger.debug("This is a debug message!", TAG);
+    AdvancedLogger::debug("This is a debug message!", TAG);
     delay(500);
-    logger.info("This is an info message!!", TAG);
+    AdvancedLogger::info("This is an info message!!", TAG);
     delay(500);
-    logger.warning("This is a warning message!!!", TAG);
+    AdvancedLogger::warning("This is a warning message!!!", TAG);
     delay(500);
-    logger.error("This is a error message!!!!", TAG);
+    AdvancedLogger::error("This is a error message!!!!", TAG);
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", TAG);
+    AdvancedLogger::fatal("This is a fatal message!!!!!", TAG);
     delay(500);
 
-    logger.info("Testing printf functionality: %d, %f, %s", TAG, 1, 2.0, "three");
+    AdvancedLogger::info("Testing printf functionality: %d, %f, %s", TAG, 1, 2.0, "three");
     delay(500);
     
     // Get the current print and save levels
-    String printLevel = logger.logLevelToString(logger.getPrintLevel());
-    String saveLevel = logger.logLevelToString(logger.getSaveLevel());
+    String printLevel = AdvancedLogger::logLevelToString(AdvancedLogger::getPrintLevel());
+    String saveLevel = AdvancedLogger::logLevelToString(AdvancedLogger::getSaveLevel());
 
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
         // Print the current number of log lines
-        logger.info("Current number of log lines: %d", TAG, logger.getLogLines());
+        AdvancedLogger::info("Current number of log lines: %d", TAG, AdvancedLogger::getLogLines());
 
         // Dump the log to Serial
-        logger.info("Dumping log to Serial...", TAG);
-        logger.dump(Serial);
-        logger.info("Log dumped!", TAG);
+        AdvancedLogger::info("Dumping log to Serial...", TAG);
+        AdvancedLogger::dump(Serial);
+        AdvancedLogger::info("Log dumped!", TAG);
 
         // Dump the log to another file
-        logger.info("Dumping log to file...", TAG);
+        AdvancedLogger::info("Dumping log to file...", TAG);
         File tempFile = LittleFS.open(logDumpPath, "w");
-        logger.dump(tempFile);
+        AdvancedLogger::dump(tempFile);
         tempFile.close();
-        logger.info("Log dumped!", TAG);
+        AdvancedLogger::info("Log dumped!", TAG);
 
         // Ensure the log has been dumped correctly
-        logger.info("Printing the temporary log dump file...", TAG);
+        AdvancedLogger::info("Printing the temporary log dump file...", TAG);
         tempFile = LittleFS.open(logDumpPath, "r");
         while (tempFile.available())
         {
             Serial.write(tempFile.read());
         }
         tempFile.close();
-        logger.info("Log dump file printed!", TAG);
+        AdvancedLogger::info("Log dump file printed!", TAG);
 
         lastMillisLogDump = millis();
     }
@@ -135,12 +129,12 @@ void loop()
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
         // Clear the log and set the default configuration
-        logger.clearLogKeepLatestXPercent(50);
+        AdvancedLogger::clearLogKeepLatestXPercent(50);
         // If you want to clear the log without keeping the latest X percent of the log, use:
-        // logger.clearLog();
-        logger.setDefaultConfig();
+        // AdvancedLogger::clearLog();
+        AdvancedLogger::setDefaultConfig();
 
-        logger.info("Log cleared and default configuration set!", TAG);
+        AdvancedLogger::info("Log cleared and default configuration set!", TAG);
 
         lastMillisLogClear = millis();
     }

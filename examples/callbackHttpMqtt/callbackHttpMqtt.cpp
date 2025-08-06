@@ -3,14 +3,6 @@
  * ----------------------------
  * This example demonstrates integrating AdvancedLogger with MQTT and HTTP logging.
  * It shows how to:
-    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
-    // --------------------
-    Serial.begin(115200);
-
-    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
-    {
-        Serial.println("An Error has occurred while mounting LittleFS");
-    }ward logs to an HTTP endpoint
  * - Send logs to a local MQTT broker
  * - Track logging performance metrics
  * - Handle network reconnections
@@ -18,7 +10,6 @@
  *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Created: 21/03/2024
- * Last modified: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -38,11 +29,11 @@
 #include "AdvancedLogger.h"
 
 // HTTP configuration
-const String serverEndpoint = "YOUR_IP"; // **** CHANGE THIS TO YOUR SERVER ****
+const String serverEndpoint = "http://192.168.1.100/test"; // **** CHANGE THIS TO YOUR SERVER ****
 HTTPClient http;
 
 // MQTT configuration
-const char* mqttServer = "YOUR_BROKER"; // **** CHANGE THIS TO YOUR BROKER ****
+const char* mqttServer = "test.mosquitto.org"; // **** CHANGE THIS TO YOUR BROKER ****
 const unsigned int mqttPort = 1883;
 const char* mainTopic = "advancedlogger"; // To see the messages, subscribe to "advancedlogger/+/log/+"
 const unsigned int bufferSize = 1024;
@@ -50,9 +41,6 @@ const unsigned int bufferSize = 1024;
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
 const char *ssid = "SSID";
 const char *password = "PASSWORD";
-
-const char *customLogPath = "/customPath/log.txt";
-AdvancedLogger logger(customLogPath);
 
 const int timeZone = 0; // UTC. In milliseconds
 const int daylightOffset = 0; // No daylight saving time. In milliseconds
@@ -69,7 +57,7 @@ WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
 // Modified callback function to make the JSON in the callback faster
-char jsonBuffer[512];  // Pre-allocated buffer
+char jsonBuffer[1024];  // Pre-allocated buffer
 String cachedDeviceId;
 String cachedTopicPrefix;
 
@@ -95,32 +83,28 @@ In this example, the function will:
 The function will also measure the time taken to format the JSON,
 send the HTTP request, and publish the MQTT message.
 */
-void callback(
-    const char* timestamp,
-    unsigned long millisEsp,
-    const char* level,
-    unsigned int coreId,
-    const char* function,
-    const char* message
-) {
+void callback(const LogEntry& entry) {
     if (WiFi.status() != WL_CONNECTED) return;
 
     unsigned long startJson = micros();
-    
+
+    char levelStr[16];
+    snprintf(levelStr, sizeof(levelStr), "%s", AdvancedLogger::logLevelToString(entry.level, true));
+
     snprintf(jsonBuffer, sizeof(jsonBuffer),
         "{\"timestamp\":\"%s\","
-         "\"millis\":%lu,"
+         "\"millis\":%llu,"
          "\"level\":\"%s\","
-         "\"core\":%u,"
+         "\"core\":%d,"
          "\"function\":\"%s\","
          "\"message\":\"%s\"}",
-        timestamp,
-        millisEsp,
-        level,
-        coreId,
-        function,
-        message);
-    
+        entry.timestamp,
+        entry.millis,
+        levelStr,
+        entry.coreId,
+        entry.function,
+        entry.message);
+
     unsigned long jsonTime = micros() - startJson;
 
     // HTTP POST
@@ -142,9 +126,9 @@ void callback(
             cachedDeviceId = getDeviceId();
             cachedTopicPrefix = String(mainTopic) + "/" + cachedDeviceId + "/log/";
         }
-        
-        String topic = cachedTopicPrefix + String(level);
-        
+
+        String topic = cachedTopicPrefix + String(levelStr);
+
         if (!mqttClient.publish(topic.c_str(), jsonBuffer)) {
             Serial.printf("MQTT publish failed to %s. Error: %d\n", 
                 topic.c_str(), mqttClient.state());
@@ -160,9 +144,9 @@ void reconnectMQTT() {
     while (!mqttClient.connected()) {
         String clientId = "ESP32Client-" + getDeviceId();
         if (mqttClient.connect(clientId.c_str())) {
-            logger.info("MQTT Connected with client ID: %s", TAG, clientId.c_str());
+            AdvancedLogger::info("MQTT Connected with client ID: %s", TAG, clientId.c_str());
         } else {
-            logger.error("MQTT Connection failed, rc=%d", TAG, mqttClient.state());
+            AdvancedLogger::error("MQTT Connection failed, rc=%d", TAG, mqttClient.state());
         }
     }
 }
@@ -178,11 +162,11 @@ void setup()
         Serial.println("An Error has occurred while mounting LittleFS");
     }
 
-    logger.begin();
-    logger.setMaxLogLines(maxLogLines);
-    logger.setCallback(callback);
+    AdvancedLogger::begin();
+    AdvancedLogger::setMaxLogLines(maxLogLines);
+    AdvancedLogger::setCallback(callback);
 
-    logger.debug("AdvancedLogger setup done!", TAG);
+    AdvancedLogger::debug("AdvancedLogger setup done!", TAG);
     
     // Connect to WiFi
     // --------------------
@@ -192,11 +176,11 @@ void setup()
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(1000);
-        logger.info("Connecting to WiFi... SSID: %s | Password: %s", TAG, ssid, password);
+        AdvancedLogger::info("Connecting to WiFi... SSID: %s | Password: %s", TAG, ssid, password);
     }
     
-    logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), TAG);
-    logger.info("Device ID: %s", TAG, getDeviceId().c_str());
+    AdvancedLogger::info(("IP address: " + WiFi.localIP().toString()).c_str(), TAG);
+    AdvancedLogger::info("Device ID: %s", TAG, getDeviceId().c_str());
 
     mqttClient.setServer(mqttServer, mqttPort);
     mqttClient.setBufferSize(bufferSize); // Raise the buffer size as the standard one is only 256 bytes
@@ -204,7 +188,7 @@ void setup()
 
     configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
     
-    logger.info("Setup done!", TAG);
+    AdvancedLogger::info("Setup done!", TAG);
 }
 
 void loop()
@@ -216,24 +200,24 @@ void loop()
 
     // Test a burst of messages to see the performance
     for (int i = 0; i < 10; i++) {
-        logger.verbose("[BURST] This is a verbose message", TAG);
-        logger.debug("[BURST] This is a debug message!", TAG);
-        logger.info("[BURST] This is an info message!!", TAG);
-        logger.warning("[BURST] This is a warning message!!!", TAG);
-        logger.error("[BURST] This is a error message!!!!", TAG);
-        logger.fatal("[BURST] This is a fatal message!!!!!", TAG);
+        AdvancedLogger::verbose("[BURST] This is a verbose message", TAG);
+        AdvancedLogger::debug("[BURST] This is a debug message!", TAG);
+        AdvancedLogger::info("[BURST] This is an info message!!", TAG);
+        AdvancedLogger::warning("[BURST] This is a warning message!!!", TAG);
+        AdvancedLogger::error("[BURST] This is a error message!!!!", TAG);
+        AdvancedLogger::fatal("[BURST] This is a fatal message!!!!!", TAG);
     }
 
-    logger.debug("This is a debug message!", TAG);
+    AdvancedLogger::debug("This is a debug message!", TAG);
     delay(500);
-    logger.info("This is an info message!!", TAG);
+    AdvancedLogger::info("This is an info message!!", TAG);
     delay(500);
-    logger.warning("This is a warning message!!!", TAG);
+    AdvancedLogger::warning("This is a warning message!!!", TAG);
     delay(500);
-    logger.error("This is a error message!!!!", TAG);
+    AdvancedLogger::error("This is a error message!!!!", TAG);
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", TAG);
+    AdvancedLogger::fatal("This is a fatal message!!!!!", TAG);
     delay(500);
-    logger.info("This is an info message!!", TAG, true);
+    AdvancedLogger::info("This is an info message!!", TAG, true);
     delay(1000);
 }
