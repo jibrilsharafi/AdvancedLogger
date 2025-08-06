@@ -14,44 +14,30 @@ static const char *TAG = "advancedlogger";
  * @brief Constructs a new AdvancedLogger object.
  *
  * This constructor initializes the AdvancedLogger object with the provided
- * log file path, config file path, and timestamp format. If the provided paths
+ * log file path and timestamp format. If the provided path
  * or format are invalid, it uses the default values and logs a warning.
  *
  * @param logFilePath Path to the log file. If invalid, the default path will be used.
- * @param configFilePath Path to the config file. If invalid, the default path will be used.
  * @param timestampFormat Format for timestamps in the log. If invalid, the default format will be used.
  */
 AdvancedLogger::AdvancedLogger(
-    const char *logFilePath,
-    const char *configFilePath,
-    const char *timestampFormat)
-    : _logFilePath(logFilePath),
-      _configFilePath(configFilePath),
-      _timestampFormat(timestampFormat)
+    const char *logFilePath
+)
 {
-    if (!_isValidPath(_logFilePath.c_str()) || !_isValidPath(_configFilePath.c_str()))
-    {
-        Serial.printf(
-            "Invalid path for log %s or config file %s, using default paths: %s and %s",
-            _logFilePath.c_str(),
-            _configFilePath.c_str(),
-            DEFAULT_LOG_PATH,
-            DEFAULT_CONFIG_PATH
-        );
-
-        _logFilePath = DEFAULT_LOG_PATH;
-        _configFilePath = DEFAULT_CONFIG_PATH;
-    }
-
-    if (!_isValidTimestampFormat(_timestampFormat))
-    {
-        Serial.printf(
-            "Invalid timestamp format %s, using default format: %s",
-            _timestampFormat,
-            DEFAULT_TIMESTAMP_FORMAT
-        );
-
-        _timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
+    // Initialize _logFilePath with provided path or default
+    if (logFilePath && _isValidPath(logFilePath)) {
+        strncpy(_logFilePath, logFilePath, MAX_LOG_PATH_LENGTH - 1);
+        _logFilePath[MAX_LOG_PATH_LENGTH - 1] = '\0';
+    } else {
+        if (logFilePath) {
+            Serial.printf(
+                "Invalid path for log file %s, using default path: %s\n",
+                logFilePath,
+                DEFAULT_LOG_PATH
+            );
+        }
+        strncpy(_logFilePath, DEFAULT_LOG_PATH, MAX_LOG_PATH_LENGTH - 1);
+        _logFilePath[MAX_LOG_PATH_LENGTH - 1] = '\0';
     }
 }
 
@@ -59,7 +45,7 @@ AdvancedLogger::AdvancedLogger(
  * @brief Initializes the AdvancedLogger object.
  *
  * Initializes the AdvancedLogger object by setting the configuration
- * from the SPIFFS filesystem. If the configuration file is not found,
+ * from the Preferences. If the configuration is not found,
  * the default configuration is used.
  * 
  */
@@ -67,28 +53,53 @@ void AdvancedLogger::begin()
 {
     debug("AdvancedLogger initializing...", TAG);
 
-    if (!_setConfigFromSpiffs())
+    if (!_setConfigFromPreferences())
     {
-        Serial.printf("Failed to set config from filesystem, using default config");
-        setDefaultConfig();
+        debug("Using default config as preferences were not found", TAG);
     }
-    _logLines = getLogLines();
 
-    bool spiffsMounted = SPIFFS.begin(false);
-    if (!spiffsMounted) {
-        Serial.printf("Failed to mount SPIFFS. Please mount it before using AdvancedLogger.");
-        error("SPIFFS mount failed", TAG);
-        return;
+    // Check if LittleFS is already mounted by trying to open a test file
+    // If it fails, then we need to mount it
+    File testFile = LittleFS.open("/", "r");
+    bool isAlreadyMounted = testFile;
+    if (testFile) testFile.close();
+    
+    if (!isAlreadyMounted) {
+        bool littleFsMounted = LittleFS.begin(false);
+        if (!littleFsMounted) {
+            Serial.printf("Failed to mount LittleFS. Please mount it before using AdvancedLogger.\n");
+            error("LittleFS mount failed", TAG);
+            return;
+        }
+        debug("LittleFS mounted successfully", TAG);
+    } else {
+        debug("LittleFS already mounted", TAG);
     }    
+    
+    // Ensure the directory for the log file exists
+    if (!_ensureDirectoryExists(_logFilePath)) {
+        Serial.printf("Failed to create directory for log file %s, falling back to default path\n", _logFilePath);
+        // Fall back to default path if custom path fails
+        strncpy(_logFilePath, DEFAULT_LOG_PATH, MAX_LOG_PATH_LENGTH - 1);
+        _logFilePath[MAX_LOG_PATH_LENGTH - 1] = '\0';
+        if (!_ensureDirectoryExists(_logFilePath)) {
+            Serial.printf("Failed to create directory for default log file %s\n", _logFilePath);
+            error("Log file directory creation failed", TAG);
+            return;
+        }
+    }
     
     bool isLogFileOpen = _checkAndOpenLogFile(FileMode::APPEND);
     if (!isLogFileOpen) {
-        Serial.printf("Failed to open log file %s", _logFilePath.c_str());
+        Serial.printf("Failed to open log file %s\n", _logFilePath);
         error("Log file opening failed", TAG);
         return;
-    } else {
-        debug("AdvancedLogger initialized", TAG);
     }
+    
+    // Now that the file exists, get the log lines count
+    _logLines = getLogLines();
+    
+    debug("AdvancedLogger initialized", TAG);
 }
 
 /**
@@ -218,14 +229,18 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
 
     // Pre-allocation to avoid computing twice and ensuring consistent values
     unsigned long _millis = millis();
-    String _timestamp = _getTimestamp();
+    char _timestamp[TIMESTAMP_BUFFER_SIZE];
+    char _formattedMillis[MAX_MILLIS_STRING_LENGTH];
     unsigned int _coreId = CORE_ID;
+
+    _getTimestampIsoUtc(_timestamp, sizeof(_timestamp));
+    _formatMillis(_millis, _formattedMillis, sizeof(_formattedMillis));
 
     // Always call the callback if it is set, regardless of log level.
     // This allows for external handling of log messages
     if (_callback) {
         _callback(
-            _timestamp.c_str(),
+            _timestamp,
             _millis,
             logLevelToStringLower(logLevel),
             _coreId,
@@ -244,8 +259,8 @@ void AdvancedLogger::_log(const char *message, const char *function, LogLevel lo
         _messageFormatted,
         sizeof(_messageFormatted),
         LOG_FORMAT,
-        _timestamp.c_str(),
-        _formatMillis(_millis).c_str(),
+        _timestamp,
+        _formattedMillis,
         logLevelToString(logLevel, false),
         _coreId,
         function,
@@ -305,13 +320,18 @@ void AdvancedLogger::_logPrint(const char *format, const char *function, LogLeve
 
     PROCESS_ARGS(format, logLevel);
     char logMessage[MAX_LOG_LENGTH + 200];
+    char timestamp[TIMESTAMP_BUFFER_SIZE];
+    char formattedMillis[MAX_MILLIS_STRING_LENGTH];
+
+    _getTimestampIsoUtc(timestamp, sizeof(timestamp));
+    _formatMillis(millis(), formattedMillis, sizeof(formattedMillis));
 
     snprintf(
         logMessage,
         sizeof(logMessage),
         LOG_FORMAT,
-        _getTimestamp().c_str(),
-        _formatMillis(millis()).c_str(),
+        timestamp,
+        formattedMillis,
         logLevelToString(logLevel, false),
         CORE_ID,
         function,
@@ -331,7 +351,7 @@ void AdvancedLogger::setPrintLevel(LogLevel logLevel)
 {
     debug("Setting print level to %s", TAG, logLevelToString(logLevel));
     _printLevel = logLevel;
-    _saveConfigToSpiffs();
+    _saveConfigToPreferences();
 }
 
 /**
@@ -345,7 +365,7 @@ void AdvancedLogger::setSaveLevel(LogLevel logLevel)
 {
     debug("Setting save level to %s", TAG, logLevelToString(logLevel));
     _saveLevel = logLevel;
-    _saveConfigToSpiffs();
+    _saveConfigToPreferences();
 }
 
 /**
@@ -389,76 +409,77 @@ void AdvancedLogger::setDefaultConfig()
 }
 
 /**
- * @brief Sets the maximum number of log lines.
+ * @brief Sets the configuration from Preferences.
  *
- * This method sets the maximum number of log lines to the provided value.
- *
- * @param maxLogLines Maximum number of log lines.
+ * This method loads the configuration from ESP32 Preferences (NVS).
+ * 
+ * @return true if successful, false otherwise
 */
-bool AdvancedLogger::_setConfigFromSpiffs()
+bool AdvancedLogger::_setConfigFromPreferences()
 {
-    debug("Setting config from filesystem...", TAG);
+    debug("Setting config from preferences...", TAG);
 
-    File _file = SPIFFS.open(_configFilePath, "r");
-    if (!_file)
-    {
-        Serial.printf("Failed to open config file for reading");
-        _logPrint("Failed to open config file", TAG, LogLevel::ERROR);
+    // Try to open preferences in read-write mode (this creates namespace if it doesn't exist)
+    if (!_preferences.begin(PREFERENCES_NAMESPACE, false)) {
+        debug("Failed to open preferences namespace", TAG);
+        // Set default values
+        _printLevel = DEFAULT_PRINT_LEVEL;
+        _saveLevel = DEFAULT_SAVE_LEVEL;
+        _maxLogLines = DEFAULT_MAX_LOG_LINES;
         return false;
     }
-
-    int _loopCount = 0;
-    while (_file.available() && _loopCount < MAX_WHILE_LOOP_COUNT)
-    {
-        _loopCount++;
-        String line = _file.readStringUntil('\n');
-        int separatorPosition = line.indexOf('=');
-        String key = line.substring(0, separatorPosition);
-        String value = line.substring(separatorPosition + 1);
-        value.trim();
-
-        if (key == "printLevel")
-        {
-            setPrintLevel(_charToLogLevel(value.c_str()));
-        }
-        else if (key == "saveLevel")
-        {
-            setSaveLevel(_charToLogLevel(value.c_str()));
-        }
-        else if (key == "maxLogLines")
-        {
-            setMaxLogLines(value.toInt());
-        }
+    
+    // Check if this is a fresh namespace by looking for a key that should always exist
+    if (!_preferences.isKey("printLevel")) {
+        debug("Fresh preferences namespace detected, initializing with defaults", TAG);
+        // This is a new/empty namespace, set defaults and save them
+        _preferences.putInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
+        _preferences.putInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
+        _preferences.putInt("maxLogLines", DEFAULT_MAX_LOG_LINES);
+        
+        _printLevel = DEFAULT_PRINT_LEVEL;
+        _saveLevel = DEFAULT_SAVE_LEVEL;
+        _maxLogLines = DEFAULT_MAX_LOG_LINES;
+    } else {
+        debug("Loading existing preferences", TAG);
+        // Load existing values
+        int printLevelInt = _preferences.getInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
+        _printLevel = static_cast<LogLevel>(printLevelInt);
+        
+        int saveLevelInt = _preferences.getInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
+        _saveLevel = static_cast<LogLevel>(saveLevelInt);
+        
+        _maxLogLines = _preferences.getInt("maxLogLines", DEFAULT_MAX_LOG_LINES);
     }
+    
+    _preferences.end();
 
-    _file.close();
-
-    debug("Config set from filesystem", TAG);
+    debug("Config loaded from preferences", TAG);
     return true;
 }
 
 /**
- * @brief Saves the configuration to the SPIFFS filesystem.
+ * @brief Saves the configuration to Preferences.
  *
- * This method saves the configuration to the SPIFFS filesystem.
+ * This method saves the configuration to ESP32 Preferences (NVS).
 */
-void AdvancedLogger::_saveConfigToSpiffs()
+void AdvancedLogger::_saveConfigToPreferences()
 {
-    debug("Saving config to filesystem...", TAG);
-    File _file = SPIFFS.open(_configFilePath, "w");
-    if (!_file)
-    {
-        Serial.printf("Failed to open config file for writing");
-        _logPrint("Failed to open config file", TAG, LogLevel::ERROR);
+    debug("Saving config to preferences...", TAG);
+    
+    // Try to open in read-write mode (this will create the namespace if it doesn't exist)
+    if (!_preferences.begin(PREFERENCES_NAMESPACE, false)) {
+        debug("Failed to open preferences for writing", TAG);
         return;
     }
+    
+    _preferences.putInt("printLevel", static_cast<int>(_printLevel));
+    _preferences.putInt("saveLevel", static_cast<int>(_saveLevel));
+    _preferences.putInt("maxLogLines", _maxLogLines);
+    
+    _preferences.end();
 
-    _file.println(String("printLevel=") + logLevelToString(_printLevel));
-    _file.println(String("saveLevel=") + logLevelToString(_saveLevel));
-    _file.println(String("maxLogLines=") + String(_maxLogLines));
-    _file.close();
-
-    debug("Config saved to filesystem", TAG);
+    debug("Config saved to preferences", TAG);
 }
 
 /**
@@ -470,11 +491,11 @@ void AdvancedLogger::_saveConfigToSpiffs()
 */
 void AdvancedLogger::setMaxLogLines(int maxLogLines)
 {
-    debug(
-        ("Setting max log lines to " + String(maxLogLines)).c_str(),
-        TAG);
+    char message[MAX_LOG_MESSAGE_LENGTH];
+    snprintf(message, sizeof(message), "Setting max log lines to %d", maxLogLines);
+    debug(message, TAG);
     _maxLogLines = maxLogLines;
-    _saveConfigToSpiffs();
+    _saveConfigToPreferences();
 }
 
 /**
@@ -486,7 +507,10 @@ void AdvancedLogger::setMaxLogLines(int maxLogLines)
 */
 int AdvancedLogger::getLogLines()
 {
-    if (!_checkAndOpenLogFile(FileMode::READ)) return 0;
+    if (!_checkAndOpenLogFile(FileMode::READ)) {
+        // If file doesn't exist or can't be opened, return 0
+        return 0;
+    }
 
     int lines = 0;
     int _loopCount = 0;
@@ -498,6 +522,11 @@ int AdvancedLogger::getLogLines()
             lines++;
         }
     }
+    
+    // Close the file and reopen in append mode for future operations
+    _closeLogFile();
+    _checkAndOpenLogFile(FileMode::APPEND);
+    
     return lines;
 }
 
@@ -544,8 +573,11 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
 
     // Count lines first
     size_t totalLines = 0;
+    char lineBuffer[MAX_LOG_LINE_LENGTH];
     while (_logFile.available() && totalLines < MAX_WHILE_LOOP_COUNT) {
-        if (_logFile.readStringUntil('\n').length() > 0) totalLines++;
+        if (_logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1) > 0) {
+            totalLines++;
+        }
     }
     
     // Reopen for reading from beginning
@@ -556,7 +588,10 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
     size_t linesToKeep = (totalLines * percent) / 100;
     size_t linesToSkip = totalLines - linesToKeep;
 
-    File tempFile = SPIFFS.open(_logFilePath + ".tmp", "w");
+    char tempFilePath[MAX_TEMP_FILE_PATH_LENGTH];
+    snprintf(tempFilePath, sizeof(tempFilePath), "%s.tmp", _logFilePath);
+    
+    File tempFile = LittleFS.open(tempFilePath, "w");
     if (!tempFile) {
         _logPrint("Failed to create temp file", TAG, LogLevel::ERROR);
         _closeLogFile();
@@ -565,15 +600,16 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
 
     // Skip lines by reading
     for (size_t i = 0; i < linesToSkip && _logFile.available(); i++) {
-        _logFile.readStringUntil('\n');
+        _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
     }
 
     // Direct copy of remaining lines
     int _loopCount = 0;
     while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT) {
-        String line = _logFile.readStringUntil('\n');
-        if (line.length() > 0) {
-            tempFile.println(line);
+        int bytesRead = _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
+        if (bytesRead > 0) {
+            lineBuffer[bytesRead] = '\0';
+            tempFile.println(lineBuffer);
         }
         _loopCount++;
     }
@@ -581,8 +617,8 @@ void AdvancedLogger::clearLogKeepLatestXPercent(int percent)
     _closeLogFile();
     tempFile.close();
 
-    SPIFFS.remove(_logFilePath);
-    SPIFFS.rename(_logFilePath + ".tmp", _logFilePath);
+    LittleFS.remove(_logFilePath);
+    LittleFS.rename(tempFilePath, _logFilePath);
 
     _logLines = linesToKeep;
     _logPrint("Log cleared keeping latest entries", TAG, LogLevel::INFO);
@@ -623,7 +659,7 @@ void AdvancedLogger::dump(Stream &stream)
     while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT)
     {
         _loopCount++;
-        stream.write(_logFile.read());
+        stream.write(static_cast<uint8_t>(_logFile.read()));
     }
     stream.flush();
 
@@ -661,18 +697,16 @@ LogLevel AdvancedLogger::_charToLogLevel(const char *logLevelChar)
 /**
  * @brief Gets the timestamp.
  *
- * This method gets the timestamp.
+ * This method gets the timestamp in ISO UTC format and stores it in the provided buffer.
  *
- * @return String Timestamp.
+ * @param buffer Buffer to store the timestamp.
+ * @param bufferSize Size of the buffer.
 */
-String AdvancedLogger::_getTimestamp()
+void AdvancedLogger::_getTimestampIsoUtc(char* buffer, size_t bufferSize)
 {
-    char _timestamp[1024];
-
     time_t _time = time(nullptr);
-    struct tm _timeinfo = *localtime(&_time);
-    strftime(_timestamp, sizeof(_timestamp), _timestampFormat, &_timeinfo);
-    return String(_timestamp);
+    struct tm _timeinfo = *gmtime(&_time);
+    strftime(buffer, bufferSize, DEFAULT_TIMESTAMP_FORMAT, &_timeinfo);
 }
 
 /**
@@ -723,53 +757,107 @@ bool AdvancedLogger::_isValidPath(const char *path)
 }
 
 /**
- * @brief Checks if a timestamp format is valid.
+ * @brief Ensures that the directory for the given file path exists.
  *
- * This method checks if a timestamp format is valid.
+ * This method creates the directory structure needed for the given file path
+ * if it doesn't already exist. Uses LittleFS.mkdir() to create directories.
  *
- * @param format Timestamp format to check.
- * @return bool Whether the timestamp format is valid.
+ * @param filePath Full path to the file (directory will be extracted from this)
+ * @return bool Whether the directory exists or was successfully created.
 */
-bool AdvancedLogger::_isValidTimestampFormat(const char *format)
+bool AdvancedLogger::_ensureDirectoryExists(const char* filePath)
 {
-    if (_getTimestamp().length() > 0)
-    {
+    // Find the last slash
+    const char* lastSlash = strrchr(filePath, '/');
+    if (!lastSlash) {
+        // No directory in path, file is in root
         return true;
     }
-    else
-    {
+    
+    // Extract directory path
+    size_t dirLen = lastSlash - filePath;
+    if (dirLen == 0) {
+        // File is in root directory (path starts with /), no need to create directory
+        debug("File is in root directory, no directory creation needed", TAG);
+        return true;
+    }
+    
+    if (dirLen >= MAX_LOG_PATH_LENGTH) {
+        debug("Directory path too long", TAG);
         return false;
     }
+    
+    char dirPath[MAX_LOG_PATH_LENGTH];
+    strncpy(dirPath, filePath, dirLen);
+    dirPath[dirLen] = '\0';
+    
+    // Try to create the directory first - if it already exists, this will fail but that's ok
+    // This avoids the error when trying to open a non-existent directory
+    if (LittleFS.mkdir(dirPath)) {
+        debug("Directory created: %s", TAG, dirPath);
+        return true;
+    }
+    
+    // If mkdir failed, check if it's because the directory already exists
+    File dir = LittleFS.open(dirPath, "r");
+    if (dir && dir.isDirectory()) {
+        dir.close();
+        debug("Directory already exists: %s", TAG, dirPath);
+        return true;
+    }
+    if (dir) dir.close();
+    
+    debug("Failed to create directory: %s", TAG, dirPath);
+    return false;
 }
 
 /**
- * @brief Formats milliseconds.
+ * @brief Formats milliseconds with space separators.
  *
- * This method formats milliseconds.
+ * This method formats milliseconds with space separators every 3 digits.
  *
- * @param millis Milliseconds to format.
- * @return String Formatted milliseconds.
+ * @param millisToFormat Milliseconds to format.
+ * @param buffer Buffer to store the formatted string.
+ * @param bufferSize Size of the buffer.
 */
-String AdvancedLogger::_formatMillis(unsigned long millisToFormat) {
-    String str = String(millisToFormat);
-    int len = str.length();
+void AdvancedLogger::_formatMillis(unsigned long millisToFormat, char* buffer, size_t bufferSize) {
+    // Convert number to string first
+    char numStr[16];
+    snprintf(numStr, sizeof(numStr), "%lu", millisToFormat);
+    int len = strlen(numStr);
     
-    // Pre-calculate final length and reserve space
+    // Calculate how many spaces we need
     int spaces = (len - 1) / 3;
-    String result;
-    result.reserve(len + spaces);
+    int resultLen = len + spaces;
     
-    // Build from left to right to avoid substring overhead
+    // Check if buffer is large enough
+    if (resultLen + 1 > bufferSize) {
+        // Fallback: just copy the number without spaces
+        strncpy(buffer, numStr, bufferSize - 1);
+        buffer[bufferSize - 1] = '\0';
+        return;
+    }
+    
+    // Build the formatted string
     int pos = len % 3;
     if (pos == 0) pos = 3;
     
-    result += str.substring(0, pos);
-    while (pos < len) {
-        result += " ";
-        result += str.substring(pos, pos + 3);
-        pos += 3;
+    int bufferPos = 0;
+    
+    // Copy first group
+    for (int i = 0; i < pos && bufferPos < bufferSize - 1; i++) {
+        buffer[bufferPos++] = numStr[i];
     }
-    return result;
+    
+    // Copy remaining groups with spaces
+    while (pos < len && bufferPos < bufferSize - 1) {
+        buffer[bufferPos++] = ' ';
+        for (int i = 0; i < 3 && pos < len && bufferPos < bufferSize - 1; i++) {
+            buffer[bufferPos++] = numStr[pos++];
+        }
+    }
+    
+    buffer[bufferPos] = '\0';
 }
 
 /**
@@ -821,11 +909,21 @@ void AdvancedLogger::_closeLogFile()
 bool AdvancedLogger::_reopenLogFile(FileMode mode) 
 {
     _closeLogFile();
-    _logFile = SPIFFS.open(_logFilePath, _fileModeToString(mode));
+    
+    // If we're trying to read a file that doesn't exist, return false
+    if (mode == FileMode::READ && !LittleFS.exists(_logFilePath)) {
+        debug("Log file does not exist for reading: %s", TAG, _logFilePath);
+        return false;
+    }
+    
+    _logFile = LittleFS.open(_logFilePath, _fileModeToString(mode));
     if (_logFile) {
         _currentFileMode = mode;
+        debug("Log file opened in %s mode: %s", TAG, _fileModeToString(mode), _logFilePath);
         return true;
     }
+    
+    debug("Failed to open log file in %s mode: %s", TAG, _fileModeToString(mode), _logFilePath);
     _currentFileMode = FileMode::APPEND; // Reset to default on failure
     return false;
 }

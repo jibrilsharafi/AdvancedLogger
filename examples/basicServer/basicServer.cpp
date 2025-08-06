@@ -17,7 +17,7 @@
  */
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
@@ -25,12 +25,7 @@
 #include "AdvancedLogger.h"
 
 const char *customLogPath = "/customPath/log.txt";
-const char *customConfigPath = "/customPath/config.txt";
-const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
-AdvancedLogger logger(
-    customLogPath,
-    customConfigPath,
-    customTimestampFormat);
+AdvancedLogger logger(customLogPath);
 
 AsyncWebServer server(80);
 
@@ -51,13 +46,13 @@ static const char* TAG = "main";
 
 void setup()
 {
-    // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
     // --------------------
     Serial.begin(115200);
 
-    if (!SPIFFS.begin(true)) // Setting to true will format the SPIFFS if mounting fails
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        Serial.println("An Error has occurred while mounting LittleFS");
     }
 
     logger.begin();
@@ -82,10 +77,9 @@ void setup()
     // Serve a simple webpage with a button that sends the user to the page /log and /config
     // --------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button><br><br><button onclick=\"window.location.href='/config'\">Explore the configuration</button>"); });
+              { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button>"); });
     
-    server.serveStatic("/log", SPIFFS, customLogPath);
-    server.serveStatic("/config", SPIFFS, customConfigPath);
+    server.serveStatic("/log", LittleFS, customLogPath);
     
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });

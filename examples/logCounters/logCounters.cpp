@@ -17,7 +17,7 @@
  */
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 
 #include "AdvancedLogger.h"
 
@@ -27,12 +27,12 @@ static const char* TAG = "main";
 
 void setup()
 {
-    // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
     Serial.begin(115200);
 
-    if (!SPIFFS.begin(true)) // Setting to true will format the SPIFFS if mounting fails
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        Serial.println("An Error has occurred while mounting LittleFS");
     }
 
     // Initialize the logger

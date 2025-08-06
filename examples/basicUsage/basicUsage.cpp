@@ -23,20 +23,14 @@
  */
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 
 #include "AdvancedLogger.h"
 
 const char *customLogPath = "/customPath/log.txt";
-const char *customConfigPath = "/customPath/config.txt";
-// For more info on formatting, see https://www.cplusplus.com/reference/ctime/strftime/
-const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
 
-AdvancedLogger logger(
-    customLogPath,
-    customConfigPath,
-    customTimestampFormat);
-// If you don't want to set custom paths and timestamp format, you can 
+AdvancedLogger logger(customLogPath);
+// If you don't want to set the custom path, you can 
 // just use the default constructor:
 // AdvancedLogger logger;
 
@@ -59,13 +53,13 @@ static const char* TAG = "main";
 
 void setup()
 {
-    // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
     // --------------------
     Serial.begin(115200);
 
-    if (!SPIFFS.begin(true)) // Setting to true will format the SPIFFS if mounting fails
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        Serial.println("An Error has occurred while mounting LittleFS");
     }
 
     // Initialize the logger
@@ -120,14 +114,14 @@ void loop()
 
         // Dump the log to another file
         logger.info("Dumping log to file...", TAG);
-        File tempFile = SPIFFS.open(logDumpPath, "w");
+        File tempFile = LittleFS.open(logDumpPath, "w");
         logger.dump(tempFile);
         tempFile.close();
         logger.info("Log dumped!", TAG);
 
         // Ensure the log has been dumped correctly
         logger.info("Printing the temporary log dump file...", TAG);
-        tempFile = SPIFFS.open(logDumpPath, "r");
+        tempFile = LittleFS.open(logDumpPath, "r");
         while (tempFile.available())
         {
             Serial.write(tempFile.read());

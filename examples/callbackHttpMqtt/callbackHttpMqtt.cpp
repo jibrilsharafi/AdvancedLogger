@@ -3,7 +3,14 @@
  * ----------------------------
  * This example demonstrates integrating AdvancedLogger with MQTT and HTTP logging.
  * It shows how to:
- * - Forward logs to an HTTP endpoint
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
+    // --------------------
+    Serial.begin(115200);
+
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
+    {
+        Serial.println("An Error has occurred while mounting LittleFS");
+    }ward logs to an HTTP endpoint
  * - Send logs to a local MQTT broker
  * - Track logging performance metrics
  * - Handle network reconnections
@@ -23,7 +30,7 @@
  */
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <PubSubClient.h>
@@ -45,12 +52,7 @@ const char *ssid = "SSID";
 const char *password = "PASSWORD";
 
 const char *customLogPath = "/customPath/log.txt";
-const char *customConfigPath = "/customPath/config.txt";
-const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
-AdvancedLogger logger(
-    customLogPath,
-    customConfigPath,
-    customTimestampFormat);
+AdvancedLogger logger(customLogPath);
 
 const int timeZone = 0; // UTC. In milliseconds
 const int daylightOffset = 0; // No daylight saving time. In milliseconds
@@ -167,13 +169,13 @@ void reconnectMQTT() {
 
 void setup()
 {
-    // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
     // --------------------
     Serial.begin(115200);
 
-    if (!SPIFFS.begin(true)) // Setting to true will format the SPIFFS if mounting fails
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        Serial.println("An Error has occurred while mounting LittleFS");
     }
 
     logger.begin();

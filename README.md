@@ -59,7 +59,7 @@ void loop() {
 }
 ```
 
-Output (both in the Serial and in the log file in the SPIFFS memory):
+Output (both in the Serial and in the log file in the LittleFS memory):
 
 ```cpp
 [2024-03-23 09:44:10] [1 450 ms] [INFO   ] [Core 1] [main::setup] This is an info message!
@@ -125,7 +125,7 @@ For more information regarding the necessity of this library, see the [WHY.md](W
 - [x] **Automatic log clearing**: if the free memory is less than a certain threshold, the oldest logs should be deleted, keeping the memory usage under control.
 - [x] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
-- [ ] **Upgrade to LittleFS**: the SPIFFS library is deprecated, and as such it should be replaced with the LittleFS library. Some effort has been made in this direction, but the nested folder approach gave some problems.
+- [x] **Upgrade to LittleFS**: migrated from SPIFFS to LittleFS and moved configuration to ESP32 Preferences (NVS) for better reliability and performance.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility. The *ESP8266* has been tested, but full compatibility has not been achieved yet.
 - [x] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
 - [x] **Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.

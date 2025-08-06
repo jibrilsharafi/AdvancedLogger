@@ -17,7 +17,9 @@
 #define ADVANCEDLOGGER_H
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
+#include <Preferences.h>
+#include <cstring>
 
 #include <vector>
 
@@ -47,13 +49,21 @@ constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
 
 constexpr int MAX_LOG_LENGTH = 1024;
 
-constexpr const char* DEFAULT_LOG_PATH = "/AdvancedLogger/log.txt";
-constexpr const char* DEFAULT_CONFIG_PATH = "/AdvancedLogger/config.txt";
+constexpr const char* DEFAULT_LOG_PATH = "/log.txt";
+constexpr const char* PREFERENCES_NAMESPACE = "adv_log_ns";
 
 constexpr int DEFAULT_MAX_LOG_LINES = 1000;
 constexpr int MAX_WHILE_LOOP_COUNT = 10000;
 
-constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S";
+constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S.%03u";
+constexpr int TIMESTAMP_BUFFER_SIZE = 32;
+
+// Buffer sizes for char arrays
+constexpr int MAX_LOG_PATH_LENGTH = 256;
+constexpr int MAX_MILLIS_STRING_LENGTH = 32;  // For formatted milliseconds with spaces
+constexpr int MAX_LOG_LINE_LENGTH = 1024;     // For reading log file lines
+constexpr int MAX_TEMP_FILE_PATH_LENGTH = 260; // Original path + ".tmp" suffix
+constexpr int MAX_LOG_MESSAGE_LENGTH = 64;     // For simple log messages
 
 constexpr const char* LOG_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
 
@@ -70,10 +80,7 @@ using LogCallback = std::function<void(
 class AdvancedLogger
 {
 public:
-    AdvancedLogger(
-        const char *logFilePath = DEFAULT_LOG_PATH,
-        const char *configFilePath = DEFAULT_CONFIG_PATH,
-        const char *timestampFormat = DEFAULT_TIMESTAMP_FORMAT);
+    AdvancedLogger(const char *logFilePath = DEFAULT_LOG_PATH);
 
     void begin();
     void end();
@@ -95,7 +102,6 @@ public:
 
     void setMaxLogLines(int maxLogLines);
     int getLogLines();
-    bool _checkAndOpenLogFile();
     void clearLog();
     void clearLogKeepLatestXPercent(int percent = 10);
 
@@ -149,8 +155,8 @@ public:
     }
 
 private:
-    String _logFilePath = DEFAULT_LOG_PATH;
-    String _configFilePath = DEFAULT_CONFIG_PATH;
+    char _logFilePath[MAX_LOG_PATH_LENGTH];
+    Preferences _preferences;
 
     LogLevel _printLevel = DEFAULT_PRINT_LEVEL;
     LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;    
@@ -174,18 +180,17 @@ private:
     void _closeLogFile();      bool _reopenLogFile(FileMode mode = FileMode::APPEND);
     bool _checkAndOpenLogFile(FileMode mode = FileMode::APPEND);
     const char* _fileModeToString(FileMode mode);
-    bool _setConfigFromSpiffs();
-    void _saveConfigToSpiffs();
+    bool _setConfigFromPreferences();
+    void _saveConfigToPreferences();
 
     LogLevel _charToLogLevel(const char *logLevelStr);
 
-    const char *_timestampFormat = DEFAULT_TIMESTAMP_FORMAT;
-    String _getTimestamp();
+    void _getTimestampIsoUtc(char* buffer, size_t bufferSize);
     
     bool _isValidPath(const char *path);
-    bool _isValidTimestampFormat(const char *format);
+    bool _ensureDirectoryExists(const char* filePath);
 
-    String _formatMillis(unsigned long millis);
+    void _formatMillis(unsigned long millis, char* buffer, size_t bufferSize);
 
     LogCallback _callback = nullptr;
 };
