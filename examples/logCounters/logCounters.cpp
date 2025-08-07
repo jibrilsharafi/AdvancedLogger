@@ -21,8 +21,6 @@
 
 #include "AdvancedLogger.h"
 
-static const char* TAG = "main";
-
 void setup()
 {
     // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
@@ -39,74 +37,74 @@ void setup()
     // Set print level to VERBOSE to see all messages
     AdvancedLogger::setPrintLevel(LogLevel::DEBUG);
     
-    AdvancedLogger::info("Log counter example started!", TAG);
+    LOG_INFO("Log counter example started!");
 }
 
 void loop()
 {
     // Generate some logs of different levels
-    AdvancedLogger::verbose("This is a verbose message", TAG);
+    LOG_VERBOSE("This is a verbose message");
     delay(100);
     
-    AdvancedLogger::debug("This is a debug message", TAG);
+    LOG_DEBUG("This is a debug message");
     delay(100);
     
-    AdvancedLogger::info("This is an info message", TAG);
+    LOG_INFO("This is an info message");
     delay(100);
     
-    AdvancedLogger::warning("This is a warning message", TAG);
+    LOG_WARNING("This is a warning message");
     delay(100);
     
-    AdvancedLogger::error("This is an error message", TAG);
+    LOG_ERROR("This is an error message");
     delay(100);
 
     // Set 5 random logs
     for (int i = 0; i < 5; ++i) {
         int randomLevel = random(0, 6); // Random log level from 0 to 5
         switch (randomLevel) {
-            case 0: AdvancedLogger::verbose("Random verbose log %d", TAG, i); break;
-            case 1: AdvancedLogger::debug("Random debug log %d", TAG, i); break;
-            case 2: AdvancedLogger::info("Random info log %d", TAG, i); break;
-            case 3: AdvancedLogger::warning("Random warning log %d", TAG, i); break;
-            case 4: AdvancedLogger::error("Random error log %d", TAG, i); break;
-            case 5: AdvancedLogger::fatal("Random fatal log %d", TAG, i); break;
+            case 0: LOG_VERBOSE("Random verbose log %d", i); break;
+            case 1: LOG_DEBUG("Random debug log %d", i); break;
+            case 2: LOG_INFO("Random info log %d", i); break;
+            case 3: LOG_WARNING("Random warning log %d", i); break;
+            case 4: LOG_ERROR("Random error log %d", i); break;
+            case 5: LOG_FATAL("Random fatal log %d", i); break;
         }
         delay(200);
     }
 
     // Try a burst of 1000 verbose logs and time it
     unsigned long startTime = millis();
-    AdvancedLogger::info("Starting burst of 1000 verbose logs...", TAG);
+    LOG_INFO("Starting burst of 1000 verbose logs...");
     for (int i = 0; i < 1000; ++i) {
-        AdvancedLogger::verbose("Burst verbose log %d", TAG, i);
+        LOG_VERBOSE("Burst verbose log %d", i);
     }
     unsigned long elapsedTime = millis() - startTime;
-    AdvancedLogger::info("Burst of 1000 verbose logs completed in %lu ms (average %.2f us per log)", 
-                TAG, elapsedTime, elapsedTime / 1000.0 * 1000.0);
+    LOG_INFO("Burst of 1000 verbose logs completed in %lu ms (average %.2f us per log)", 
+                elapsedTime, elapsedTime / 1000.0 * 1000.0);
 
     delay(10000);
 
     // Try a burst of 1000 debug logs and time it
     startTime = millis();
-    AdvancedLogger::info("Starting burst of 1000 debug logs...", TAG);
+    LOG_INFO("Starting burst of 1000 debug logs...");
     for (int i = 0; i < 1000; ++i) {
-        AdvancedLogger::debug("Burst debug log %d", TAG, i);
+        LOG_DEBUG("Burst debug log %d", i);
     }
     elapsedTime = millis() - startTime;
-    AdvancedLogger::info("Burst of 1000 debug logs completed in %lu ms (average %.2f us per log)", 
-                TAG, elapsedTime, elapsedTime / 1000.0 * 1000.0);
+    LOG_INFO("Burst of 1000 debug logs completed in %lu ms (average %.2f us per log)", 
+                elapsedTime, elapsedTime / 1000.0 * 1000.0);
 
     delay(10000);
 
     // Try a burst of 1000 fatal logs and time it
     startTime = millis();
-    AdvancedLogger::info("Starting burst of 1000 fatal logs...", TAG);
+    LOG_INFO("Starting burst of 1000 fatal logs...");
     for (int i = 0; i < 1000; ++i) {
-        AdvancedLogger::fatal("Burst fatal log %d", TAG, i);
+        LOG_FATAL("Burst fatal log %d", i);
     }
     elapsedTime = millis() - startTime;
-    AdvancedLogger::info("Burst of 1000 fatal logs completed in %lu ms (average %.2f us per log)", 
-                TAG, elapsedTime, elapsedTime / 1000.0 * 1000.0);
+    LOG_INFO("Burst of 1000 fatal logs completed in %lu ms (average %.2f us per log)", 
+                elapsedTime, elapsedTime / 1000.0 * 1000.0);
 
     delay(10000);
 
@@ -115,15 +113,15 @@ void loop()
     if (millis() - lastDisplay > 10000) {
         lastDisplay = millis();
         
-        AdvancedLogger::info("=== LOG STATISTICS ===", TAG);
-        AdvancedLogger::info("Verbose logs: %lu", TAG, AdvancedLogger::getVerboseCount());
-        AdvancedLogger::info("Debug logs: %lu", TAG, AdvancedLogger::getDebugCount());
-        AdvancedLogger::info("Info logs: %lu", TAG, AdvancedLogger::getInfoCount());
-        AdvancedLogger::info("Warning logs: %lu", TAG, AdvancedLogger::getWarningCount());
-        AdvancedLogger::info("Error logs: %lu", TAG, AdvancedLogger::getErrorCount());
-        AdvancedLogger::info("Fatal logs: %lu", TAG, AdvancedLogger::getFatalCount());
-        AdvancedLogger::info("Total logs: %lu", TAG, AdvancedLogger::getTotalLogCount());
-        AdvancedLogger::info("====================", TAG);
+        LOG_INFO("=== LOG STATISTICS ===");
+        LOG_INFO("Verbose logs: %lu", AdvancedLogger::getVerboseCount());
+        LOG_INFO("Debug logs: %lu", AdvancedLogger::getDebugCount());
+        LOG_INFO("Info logs: %lu", AdvancedLogger::getInfoCount());
+        LOG_INFO("Warning logs: %lu", AdvancedLogger::getWarningCount());
+        LOG_INFO("Error logs: %lu", AdvancedLogger::getErrorCount());
+        LOG_INFO("Fatal logs: %lu", AdvancedLogger::getFatalCount());
+        LOG_INFO("Total logs: %lu", AdvancedLogger::getTotalLogCount());
+        LOG_INFO("====================");
     }
     
     // Every 30 seconds, reset counters
@@ -131,9 +129,9 @@ void loop()
     if (millis() - lastReset > 30000) {
         lastReset = millis();
         
-        AdvancedLogger::warning("Resetting log counters...", TAG);
+        LOG_WARNING("Resetting log counters...");
         AdvancedLogger::resetLogCounters();
-        AdvancedLogger::info("Log counters reset! Starting fresh count.", TAG);
+        LOG_INFO("Log counters reset! Starting fresh count.");
     }
     
     delay(1000);

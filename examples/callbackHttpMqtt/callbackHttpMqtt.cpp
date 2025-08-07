@@ -29,7 +29,7 @@
 #include "AdvancedLogger.h"
 
 // HTTP configuration
-const String serverEndpoint = "http://192.168.1.208:8080/test"; // **** CHANGE THIS TO YOUR SERVER ****
+const String serverEndpoint = "http://192.168.1.100:8080/test"; // **** CHANGE THIS TO YOUR SERVER ****
 HTTPClient http;
 
 // MQTT configuration
@@ -87,7 +87,10 @@ void callback(const LogEntry& entry) {
     unsigned long startJson = micros();
 
     char levelStr[16];
-    snprintf(levelStr, sizeof(levelStr), "%s", AdvancedLogger::logLevelToString(entry.level, true));
+    snprintf(levelStr, sizeof(levelStr), "%s", AdvancedLogger::logLevelToStringLower(entry.level, true));
+
+    char timestampIso[TIMESTAMP_BUFFER_SIZE];
+    AdvancedLogger::getTimestampIsoUtcFromUnixTimeMilliseconds(entry.unixTimeMilliseconds, timestampIso, sizeof(timestampIso));
 
     snprintf(jsonBuffer, sizeof(jsonBuffer),
         "{\"timestamp\":\"%s\","
@@ -97,7 +100,7 @@ void callback(const LogEntry& entry) {
          "\"file\":\"%s\","
          "\"function\":\"%s\","
          "\"message\":\"%s\"}",
-        entry.timestamp,
+        timestampIso,
         entry.millis,
         levelStr,
         entry.coreId,

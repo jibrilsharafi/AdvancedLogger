@@ -21,16 +21,9 @@
 #include <cstring>
 
 // TODOs:
-// - Use defines
 // - Use macros so that the tag does not need to be passed
 // - Global flags to remove at compile time some logs
 // - Buffering logs for writing
-
-// Legacy macros - consider using new LOG_* macros instead
-#define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
-#define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
-#define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
-#define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
 
 // New AdvancedLogger macros with automatic file/function/line detection
 #define LOG_VERBOSE(format, ...) AdvancedLogger::verbose(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
@@ -76,28 +69,34 @@ constexpr unsigned int MAX_MILLIS_STRING_LENGTH = 32;  // For formatted millisec
 constexpr unsigned int MAX_LOG_LINE_LENGTH = 1024;     // For reading log file lines
 constexpr unsigned int MAX_TEMP_FILE_PATH_LENGTH = MAX_LOG_PATH_LENGTH + 4; // Original path + ".tmp" suffix
 constexpr unsigned int MAX_LOG_MESSAGE_LENGTH = 64;     // For simple log messages
+constexpr unsigned int MAX_FILE_LENGTH = 32;           // For file names
+constexpr unsigned int MAX_FUNCTION_LENGTH = 32;       // For function names
 
 constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
 struct LogEntry {
-    char timestamp[TIMESTAMP_BUFFER_SIZE];
+    unsigned long long unixTimeMilliseconds;
     unsigned long long millis;
     LogLevel level;
     int coreId;
-    const char* file;
-    const char* function;
-    const char* message;
+    char file[MAX_FILE_LENGTH];
+    char function[MAX_FUNCTION_LENGTH];
+    char message[MAX_MESSAGE_LENGTH];
 
     LogEntry(
-        const char* ts, 
-        unsigned long long ms, 
-        LogLevel lvl, 
-        int core, 
+        unsigned long long unixTimeMs,
+        unsigned long long ms,
+        LogLevel lvl,
+        int core,
         const char* f,
         const char* func, 
         const char* msg
-    ) : millis(ms), level(lvl), coreId(core), file(f), function(func), message(msg) 
-    { snprintf(timestamp, sizeof(timestamp), "%s", ts); }
+    ) : unixTimeMilliseconds(unixTimeMs), millis(ms), level(lvl), coreId(core)
+    {
+        snprintf(file, sizeof(file), "%s", f);
+        snprintf(function, sizeof(function), "%s", func);
+        snprintf(message, sizeof(message), "%s", msg);
+    }
 };
 
 using LogCallback = std::function<void(const LogEntry&)>;
@@ -154,16 +153,16 @@ namespace AdvancedLogger
      *
      * @param level The log level to convert.
      * @param trim Whether to trim the string to fit the log format.
-     * @return The string representation of the log level.
+     * @return The string representation of the log level (maximum 8 characters).
      */
     inline const char* logLevelToString(LogLevel level, bool trim = true) {
         switch (level) {
-            case LogLevel::VERBOSE: return trim ? "VERBOSE" : "VERBOSE ";
-            case LogLevel::DEBUG:   return trim ? "DEBUG"   : "DEBUG   ";
-            case LogLevel::INFO:    return trim ? "INFO"    : "INFO    ";
-            case LogLevel::WARNING: return trim ? "WARNING" : "WARNING ";
-            case LogLevel::ERROR:   return trim ? "ERROR"   : "ERROR   ";
-            case LogLevel::FATAL:   return trim ? "FATAL"   : "FATAL   ";
+            case LogLevel::VERBOSE: return trim ? "VERBOSE" : "VERBOSE";
+            case LogLevel::DEBUG:   return trim ? "DEBUG"   : "DEBUG  ";
+            case LogLevel::INFO:    return trim ? "INFO"    : "INFO   ";
+            case LogLevel::WARNING: return trim ? "WARNING" : "WARNING";
+            case LogLevel::ERROR:   return trim ? "ERROR"   : "ERROR  ";
+            case LogLevel::FATAL:   return trim ? "FATAL"   : "FATAL  ";
             default:               return "UNKNOWN";
         }
     }
@@ -174,18 +173,46 @@ namespace AdvancedLogger
      * This method converts a log level to its lowercase string representation.
      *
      * @param level The log level to convert.
-     * @return The lowercase string representation of the log level.
+     * @return The lowercase string representation of the log level (maximum 8 characters).
      */
-    inline const char* logLevelToStringLower(LogLevel level) {
+    inline const char* logLevelToStringLower(LogLevel level, bool trim = true) {
         switch (level) {
-            case LogLevel::VERBOSE: return "verbose";
-            case LogLevel::DEBUG:   return "debug";
-            case LogLevel::INFO:    return "info";
-            case LogLevel::WARNING: return "warning";
-            case LogLevel::ERROR:   return "error";
-            case LogLevel::FATAL:   return "fatal";
+            case LogLevel::VERBOSE: return trim ? "verbose" : "verbose";
+            case LogLevel::DEBUG:   return trim ? "debug"   : "debug  ";
+            case LogLevel::INFO:    return trim ? "info"    : "info   ";
+            case LogLevel::WARNING: return trim ? "warning" : "warning";
+            case LogLevel::ERROR:   return trim ? "error"   : "error  ";
+            case LogLevel::FATAL:   return trim ? "fatal"   : "fatal  ";
             default:               return "unknown";
         }
+    }
+
+    /**
+     * @brief Formats a given Unix timestamp (in milliseconds) as an ISO 8601 UTC string with milliseconds.
+     *
+     * This function converts the provided Unix time in milliseconds to a string in ISO 8601 UTC format,
+     * including milliseconds, and stores it in the provided buffer.
+     *
+     * @param unixTimeMilliseconds The Unix timestamp in milliseconds.
+     * @param buffer Buffer to store the formatted timestamp string.
+     * @param bufferSize Size of the buffer.
+     */
+    inline void getTimestampIsoUtcFromUnixTimeMilliseconds(unsigned long long unixTimeMilliseconds, char* buffer, size_t bufferSize)
+    {
+        time_t seconds = unixTimeMilliseconds / 1000;
+        int milliseconds = (int)(unixTimeMilliseconds % 1000);
+
+        struct tm utc_tm;
+        gmtime_r(&seconds, &utc_tm);
+
+        snprintf(buffer, bufferSize, DEFAULT_TIMESTAMP_FORMAT,
+                utc_tm.tm_year + 1900,
+                utc_tm.tm_mon + 1,
+                utc_tm.tm_mday,
+                utc_tm.tm_hour,
+                utc_tm.tm_min,
+                utc_tm.tm_sec,
+                milliseconds);
     }
 
     /**

@@ -43,8 +43,6 @@ const char *logDumpPath = "/logDump.txt";
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
 
-static const char* TAG = "main";
-
 void setup()
 {
     // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
@@ -66,30 +64,30 @@ void setup()
     // Set the maximum number of log lines before the log is cleared (optional)
     AdvancedLogger::setMaxLogLines(maxLogLines);
 
-    AdvancedLogger::debug("AdvancedLogger setup done!", TAG);
+    LOG_DEBUG("AdvancedLogger setup done!");
    
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
 
-    AdvancedLogger::info("Setup done!", TAG);
+    LOG_INFO("Setup done!");
 }
 
 void loop()
 {
-    AdvancedLogger::verbose("This is a verbose message", TAG);
+    LOG_VERBOSE("This is a verbose message");
     delay(500);
-    AdvancedLogger::debug("This is a debug message!", TAG);
+    LOG_DEBUG("This is a debug message!");
     delay(500);
-    AdvancedLogger::info("This is an info message!!", TAG);
+    LOG_INFO("This is an info message!!");
     delay(500);
-    AdvancedLogger::warning("This is a warning message!!!", TAG);
+    LOG_WARNING("This is a warning message!!!");
     delay(500);
-    AdvancedLogger::error("This is a error message!!!!", TAG);
+    LOG_ERROR("This is a error message!!!!");
     delay(500);
-    AdvancedLogger::fatal("This is a fatal message!!!!!", TAG);
+    LOG_FATAL("This is a fatal message!!!!!");
     delay(500);
 
-    AdvancedLogger::info("Testing printf functionality: %d, %f, %s", TAG, 1, 2.0, "three");
+    LOG_INFO("Testing printf functionality: %d, %f, %s", 1, 2.0, "three");
     delay(500);
     
     // Get the current print and save levels
@@ -99,29 +97,29 @@ void loop()
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
         // Print the current number of log lines
-        AdvancedLogger::info("Current number of log lines: %d", TAG, AdvancedLogger::getLogLines());
+        LOG_INFO("Current number of log lines: %d", AdvancedLogger::getLogLines());
 
         // Dump the log to Serial
-        AdvancedLogger::info("Dumping log to Serial...", TAG);
+        LOG_INFO("Dumping log to Serial...");
         AdvancedLogger::dump(Serial);
-        AdvancedLogger::info("Log dumped!", TAG);
+        LOG_INFO("Log dumped!");
 
         // Dump the log to another file
-        AdvancedLogger::info("Dumping log to file...", TAG);
+        LOG_INFO("Dumping log to file...");
         File tempFile = LittleFS.open(logDumpPath, "w");
         AdvancedLogger::dump(tempFile);
         tempFile.close();
-        AdvancedLogger::info("Log dumped!", TAG);
+        LOG_INFO("Log dumped!");
 
         // Ensure the log has been dumped correctly
-        AdvancedLogger::info("Printing the temporary log dump file...", TAG);
+        LOG_INFO("Printing the temporary log dump file...");
         tempFile = LittleFS.open(logDumpPath, "r");
         while (tempFile.available())
         {
             Serial.write(tempFile.read());
         }
         tempFile.close();
-        AdvancedLogger::info("Log dump file printed!", TAG);
+        LOG_INFO("Log dump file printed!");
 
         lastMillisLogDump = millis();
     }
@@ -134,7 +132,7 @@ void loop()
         // AdvancedLogger::clearLog();
         AdvancedLogger::setDefaultConfig();
 
-        AdvancedLogger::info("Log cleared and default configuration set!", TAG);
+        LOG_INFO("Log cleared and default configuration set!");
 
         lastMillisLogClear = millis();
     }

@@ -11,7 +11,6 @@
 namespace AdvancedLogger
 {    
     static char _logFilePath[MAX_LOG_PATH_LENGTH];
-    static Preferences _preferences;
 
     static LogLevel _printLevel = DEFAULT_PRINT_LEVEL;
     static LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;    
@@ -30,10 +29,8 @@ namespace AdvancedLogger
 
     static void _log(const char *message, const char *file, const char *function, int line, LogLevel logLevel);
     static void _increaseLogCount(LogLevel logLevel);
-    static void _logPrint(const char *format, const char *file, const char *function, int line, LogLevel logLevel, ...);   
     
-    
-    static void _save(const char *messageFormatted);
+    static void _save(const char *messageFormatted, bool flush = false);
     static void _closeLogFile();      
     static bool _reopenLogFile(FileMode mode = FileMode::APPEND);
     static bool _checkAndOpenLogFile(FileMode mode = FileMode::APPEND);
@@ -41,7 +38,7 @@ namespace AdvancedLogger
     static bool _setConfigFromPreferences();
     static void _saveConfigToPreferences();
 
-    static void _getTimestampIsoUtc(char* buffer, size_t bufferSize);
+    static unsigned long long _getUnixTimeMilliseconds();
 
     static bool _isValidPath(const char *path);
     static bool _ensureDirectoryExists(const char* filePath);
@@ -291,17 +288,15 @@ namespace AdvancedLogger
         if (!_callback && (logLevel < _printLevel) && (logLevel < _saveLevel)) return;
 
         // Use this instead of millis to avoid rollover after 49 days
+        unsigned long long unixTimeMs = _getUnixTimeMilliseconds();
         unsigned long long millis = (esp_timer_get_time() / 1000ULL);
-        char timestamp[TIMESTAMP_BUFFER_SIZE];
-
-        _getTimestampIsoUtc(timestamp, sizeof(timestamp));
 
         // Always call the callback if it is set, regardless of log level.
         // This allows for external handling of log messages
         if (_callback) {
             _callback(
                 LogEntry(
-                    timestamp,
+                    unixTimeMs,
                     millis,
                     logLevel,
                     xPortGetCoreID(),
@@ -317,6 +312,9 @@ namespace AdvancedLogger
         if ((logLevel < _printLevel) && (logLevel < _saveLevel)) return;
 
         char messageFormatted[MAX_LOG_LENGTH];
+
+        char timestamp[TIMESTAMP_BUFFER_SIZE];
+        getTimestampIsoUtcFromUnixTimeMilliseconds(unixTimeMs, timestamp, sizeof(timestamp));
 
         char formattedMillis[MAX_MILLIS_STRING_LENGTH];
         _formatMillis(millis, formattedMillis, sizeof(formattedMillis));
@@ -371,46 +369,6 @@ namespace AdvancedLogger
     }
 
     /**
-     * @brief Logs a message with a specific log level and prints it.
-     *
-     * This method logs a message with the provided format, location information, and log level.
-     * It also prints the message to the Serial monitor.
-     *
-     * @param format Format of the message.
-     * @param file Name of the file where the message is logged.
-     * @param function Name of the function where the message is logged.
-     * @param line Line number where the message is logged.
-     * @param logLevel Log level of the message.
-     * @param ... Arguments to be formatted into the message using the printf format.
-    */
-    void _logPrint(const char *format, const char *file, const char *function, int line, LogLevel logLevel, ...)
-    {
-        if (logLevel < _printLevel && (logLevel < _saveLevel)) return;
-
-        PROCESS_ARGS(format, logLevel);
-        char logMessage[MAX_LOG_LENGTH];
-        char timestamp[TIMESTAMP_BUFFER_SIZE];
-        char formattedMillis[MAX_MILLIS_STRING_LENGTH];
-
-        _getTimestampIsoUtc(timestamp, sizeof(timestamp));
-        _formatMillis(millis(), formattedMillis, sizeof(formattedMillis));
-
-        snprintf(
-            logMessage,
-            sizeof(logMessage),
-            LOG_PRINT_FORMAT,
-            timestamp,
-            formattedMillis,
-            logLevelToString(logLevel, false),
-            xPortGetCoreID(),
-            file,
-            function,
-            message);
-
-        Serial.println(logMessage);
-    }
-
-    /**
      * @brief Sets the print level.
      *
      * This method sets the print level to the provided log level.
@@ -419,9 +377,9 @@ namespace AdvancedLogger
     */
     void setPrintLevel(LogLevel logLevel)
     {
-        LOG_DEBUG("Setting print level to %s", logLevelToString(logLevel));
         _printLevel = logLevel;
         _saveConfigToPreferences();
+        LOG_DEBUG("Set print level to %s", logLevelToString(logLevel));
     }
 
     /**
@@ -433,9 +391,9 @@ namespace AdvancedLogger
     */
     void setSaveLevel(LogLevel logLevel)
     {
-        LOG_DEBUG("Setting save level to %s", logLevelToString(logLevel));
         _saveLevel = logLevel;
         _saveConfigToPreferences();
+        LOG_DEBUG("Set save level to %s", logLevelToString(logLevel));
     }
 
     /**
@@ -469,8 +427,6 @@ namespace AdvancedLogger
     */
     void setDefaultConfig()
     {
-        LOG_DEBUG("Setting config to default...");
-
         setPrintLevel(DEFAULT_PRINT_LEVEL);
         setSaveLevel(DEFAULT_SAVE_LEVEL);
         setMaxLogLines(DEFAULT_MAX_LOG_LINES);
@@ -498,10 +454,10 @@ namespace AdvancedLogger
     */
     bool _setConfigFromPreferences()
     {
-        LOG_DEBUG("Setting config from preferences...");
+        Preferences preferences;
 
         // Try to open preferences in read-write mode (this creates namespace if it doesn't exist)
-        if (!_preferences.begin(PREFERENCES_NAMESPACE, false)) {
+        if (!preferences.begin(PREFERENCES_NAMESPACE, false)) {
             LOG_DEBUG("Failed to open preferences namespace");
             // Set default values
             _printLevel = DEFAULT_PRINT_LEVEL;
@@ -511,12 +467,12 @@ namespace AdvancedLogger
         }
         
         // Check if this is a fresh namespace by looking for a key that should always exist
-        if (!_preferences.isKey("printLevel")) {
+        if (!preferences.isKey("printLevel")) {
             LOG_DEBUG("Fresh preferences namespace detected, initializing with defaults");
             // This is a new/empty namespace, set defaults and save them
-            _preferences.putInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
-            _preferences.putInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
-            _preferences.putInt("maxLogLines", DEFAULT_MAX_LOG_LINES);
+            preferences.putInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
+            preferences.putInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
+            preferences.putULong("maxLogLines", DEFAULT_MAX_LOG_LINES);
             
             _printLevel = DEFAULT_PRINT_LEVEL;
             _saveLevel = DEFAULT_SAVE_LEVEL;
@@ -524,16 +480,16 @@ namespace AdvancedLogger
         } else {
             LOG_DEBUG("Loading existing preferences");
             // Load existing values
-            int printLevelInt = _preferences.getInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
+            int printLevelInt = preferences.getInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
             _printLevel = static_cast<LogLevel>(printLevelInt);
             
-            int saveLevelInt = _preferences.getInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
+            int saveLevelInt = preferences.getInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
             _saveLevel = static_cast<LogLevel>(saveLevelInt);
             
-            _maxLogLines = _preferences.getInt("maxLogLines", DEFAULT_MAX_LOG_LINES);
+            _maxLogLines = preferences.getULong("maxLogLines", DEFAULT_MAX_LOG_LINES);
         }
         
-        _preferences.end();
+        preferences.end();
 
         LOG_DEBUG("Config loaded from preferences");
         return true;
@@ -546,19 +502,19 @@ namespace AdvancedLogger
     */
     void _saveConfigToPreferences()
     {
-        LOG_DEBUG("Saving config to preferences...");
-        
+        Preferences preferences;
+
         // Try to open in read-write mode (this will create the namespace if it doesn't exist)
-        if (!_preferences.begin(PREFERENCES_NAMESPACE, false)) {
+        if (!preferences.begin(PREFERENCES_NAMESPACE, false)) {
             LOG_DEBUG("Failed to open preferences for writing");
             return;
         }
         
-        _preferences.putInt("printLevel", static_cast<int>(_printLevel));
-        _preferences.putInt("saveLevel", static_cast<int>(_saveLevel));
-        _preferences.putInt("maxLogLines", _maxLogLines);
+        preferences.putInt("printLevel", static_cast<int>(_printLevel));
+        preferences.putInt("saveLevel", static_cast<int>(_saveLevel));
+        preferences.putULong("maxLogLines", _maxLogLines);
         
-        _preferences.end();
+        preferences.end();
 
         LOG_DEBUG("Config saved to preferences");
     }
@@ -711,12 +667,12 @@ namespace AdvancedLogger
      *
      * @param messageFormatted Formatted message to save.
     */
-    void _save(const char *messageFormatted)
+    void _save(const char *messageFormatted, bool flush)
     {
         if (!_checkAndOpenLogFile(FileMode::APPEND)) return;
 
         _logFile.println(messageFormatted);
-        _logFile.flush(); // Ensure data is written to flash
+        if (flush) _logFile.flush(); // Ensure data is written to flash
         _logLines++;
 
         if (_logLines >= _maxLogLines) {
@@ -752,31 +708,17 @@ namespace AdvancedLogger
     }
 
     /**
-     * @brief Gets the timestamp.
+     * @brief Gets the current Unix time in milliseconds.
      *
-     * This method gets the timestamp in ISO UTC format with milliseconds and stores it in the provided buffer.
+     * This method gets the current Unix time in milliseconds since epoch.
      *
-     * @param buffer Buffer to store the timestamp.
-     * @param bufferSize Size of the buffer.
+     * @return unsigned long long Current Unix time in milliseconds.
     */
-    void _getTimestampIsoUtc(char* buffer, size_t bufferSize)
+    unsigned long long _getUnixTimeMilliseconds() 
     {
         struct timeval tv;
         gettimeofday(&tv, NULL);
-        
-        struct tm utc_tm;
-        gmtime_r(&tv.tv_sec, &utc_tm);
-        // Ensure milliseconds is constrained to 0-999 range and use int type
-        int milliseconds = (int)((tv.tv_usec / 1000) % 1000);
-        
-        snprintf(buffer, bufferSize, DEFAULT_TIMESTAMP_FORMAT,
-                utc_tm.tm_year + 1900,
-                utc_tm.tm_mon + 1,
-                utc_tm.tm_mday,
-                utc_tm.tm_hour,
-                utc_tm.tm_min,
-                utc_tm.tm_sec,
-                milliseconds);
+        return (static_cast<unsigned long long>(tv.tv_sec) * 1000ULL) + (tv.tv_usec / 1000ULL);
     }
 
     /**
@@ -951,10 +893,10 @@ namespace AdvancedLogger
     const char* _fileModeToString(FileMode mode)
     {
         switch (mode) {
-            case FileMode::APPEND: return "a";
-            case FileMode::READ:   return "r";
-            case FileMode::WRITE:  return "w";
-            default:              return "a";
+            case FileMode::APPEND:  return "a";
+            case FileMode::READ:    return "r";
+            case FileMode::WRITE:   return "w";
+            default:                return "a";
         }
     }
 
