@@ -19,19 +19,103 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <cstring>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
 
-// TODOs:
-// - Use macros so that the tag does not need to be passed
-// - Global flags to remove at compile time some logs
-// - Buffering logs for writing
+/*
+ * Queue configuration defines that can be overridden by the user:
+ * 
+ * - ADVANCED_LOGGER_QUEUE_SIZE: Number of log entries that can be queued (default: 32)
+ * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task (default: 4096 bytes)
+ * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task (default: 1)
+ * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task (default: tskNO_AFFINITY)
+ * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages (default: 256)
+ *
+ * Usage:
+ * In platformio.ini: build_flags = -DADVANCED_LOGGER_QUEUE_SIZE=64
+ * In Arduino IDE: Add #define ADVANCED_LOGGER_QUEUE_SIZE 64 before including this header
+ * In CMake: add_definitions(-DADVANCED_LOGGER_QUEUE_SIZE=64)
+ *
+ * Note: The logging system uses a non-blocking queue. If the queue is full, 
+ * log messages will be dropped to avoid blocking the calling thread. Use 
+ * getQueueSpacesAvailable() and getQueueMessagesWaiting() to monitor queue status.
+ */
 
-// New AdvancedLogger macros with automatic file/function/line detection
-#define LOG_VERBOSE(format, ...) AdvancedLogger::verbose(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-#define LOG_DEBUG(format, ...)   AdvancedLogger::debug(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO(format, ...)    AdvancedLogger::info(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-#define LOG_WARNING(format, ...) AdvancedLogger::warning(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-#define LOG_ERROR(format, ...)   AdvancedLogger::error(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
-#define LOG_FATAL(format, ...)   AdvancedLogger::fatal(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
+    #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE (10 * 1024)
+#endif
+
+#ifndef ADVANCED_LOGGER_TASK_STACK_SIZE
+    #define ADVANCED_LOGGER_TASK_STACK_SIZE (4 * 1024)
+#endif
+
+#ifndef ADVANCED_LOGGER_TASK_PRIORITY
+    #define ADVANCED_LOGGER_TASK_PRIORITY 2
+#endif
+
+#ifndef ADVANCED_LOGGER_TASK_CORE
+    #define ADVANCED_LOGGER_TASK_CORE tskNO_AFFINITY
+#endif
+
+#ifndef ADVANCED_LOGGER_MAX_MESSAGE_LENGTH
+    #define ADVANCED_LOGGER_MAX_MESSAGE_LENGTH 512
+#endif
+
+
+/*
+ * Compilation flags to conditionally disable logging:
+ * 
+ * - ADVANCED_LOGGER_DISABLE_VERBOSE: Disables VERBOSE level logging
+ * - ADVANCED_LOGGER_DISABLE_DEBUG: Disables DEBUG level logging  
+ * - ADVANCED_LOGGER_DISABLE_INFO: Disables INFO level logging
+ * - ADVANCED_LOGGER_DISABLE_WARNING: Disables WARNING level logging
+ * - ADVANCED_LOGGER_DISABLE_ERROR: Disables ERROR level logging
+ * - ADVANCED_LOGGER_DISABLE_FATAL: Disables FATAL level logging
+ * - ADVANCED_LOGGER_DISABLE_FILE_LOGGING: Disables file logging
+ * - ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING: Disables console output
+ *
+ * Usage:
+ * In platformio.ini: build_flags = -DADVANCED_LOGGER_DISABLE_DEBUG
+ * In Arduino IDE: Add #define ADVANCED_LOGGER_DISABLE_DEBUG before including this header
+ * In CMake: add_definitions(-DADVANCED_LOGGER_DISABLE_DEBUG)
+ */
+
+#ifdef ADVANCED_LOGGER_DISABLE_VERBOSE
+    #define LOG_VERBOSE(format, ...) ((void)0)
+#else
+    #define LOG_VERBOSE(format, ...) AdvancedLogger::verbose(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#endif
+
+#ifdef ADVANCED_LOGGER_DISABLE_DEBUG
+    #define LOG_DEBUG(format, ...)   ((void)0)
+#else
+    #define LOG_DEBUG(format, ...)   AdvancedLogger::debug(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#endif
+
+#ifdef ADVANCED_LOGGER_DISABLE_INFO
+    #define LOG_INFO(format, ...)    ((void)0)
+#else
+    #define LOG_INFO(format, ...)    AdvancedLogger::info(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#endif
+
+#ifdef ADVANCED_LOGGER_DISABLE_WARNING
+    #define LOG_WARNING(format, ...) ((void)0)
+#else
+    #define LOG_WARNING(format, ...) AdvancedLogger::warning(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#endif
+
+#ifdef ADVANCED_LOGGER_DISABLE_ERROR
+    #define LOG_ERROR(format, ...)   ((void)0)
+#else
+    #define LOG_ERROR(format, ...)   AdvancedLogger::error(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#endif
+
+#ifdef ADVANCED_LOGGER_DISABLE_FATAL
+    #define LOG_FATAL(format, ...)   ((void)0)
+#else
+    #define LOG_FATAL(format, ...)   AdvancedLogger::fatal(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#endif
 
 enum class FileMode : int {
     APPEND,   // "a" - append mode
@@ -51,9 +135,6 @@ enum class LogLevel : int {
 constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
 constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
 
-constexpr unsigned int MAX_MESSAGE_LENGTH = 1024;
-constexpr unsigned int MAX_LOG_LENGTH = MAX_MESSAGE_LENGTH + 128; // Extra space for timestamp, log level, and other metadata
-
 constexpr const char* DEFAULT_LOG_PATH = "/log.txt";
 constexpr const char* PREFERENCES_NAMESPACE = "adv_log_ns";
 
@@ -63,14 +144,15 @@ constexpr unsigned int MAX_WHILE_LOOP_COUNT = 10000;
 constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ";
 constexpr unsigned int TIMESTAMP_BUFFER_SIZE = 25; // 2024-03-21T12:34:56.789Z (ISO 8601 format with milliseconds) is always 24 characters long
 
-// Buffer sizes for char arrays
+constexpr unsigned int MAX_MESSAGE_LENGTH = ADVANCED_LOGGER_MAX_MESSAGE_LENGTH;
+constexpr unsigned int MAX_LOG_LENGTH = MAX_MESSAGE_LENGTH + 160; // Extra space for timestamp, log level, and other metadata
 constexpr unsigned int MAX_LOG_PATH_LENGTH = 64;
-constexpr unsigned int MAX_MILLIS_STRING_LENGTH = 32;  // For formatted milliseconds with spaces
-constexpr unsigned int MAX_LOG_LINE_LENGTH = 1024;     // For reading log file lines
-constexpr unsigned int MAX_TEMP_FILE_PATH_LENGTH = MAX_LOG_PATH_LENGTH + 4; // Original path + ".tmp" suffix
-constexpr unsigned int MAX_LOG_MESSAGE_LENGTH = 64;     // For simple log messages
-constexpr unsigned int MAX_FILE_LENGTH = 32;           // For file names
-constexpr unsigned int MAX_FUNCTION_LENGTH = 32;       // For function names
+constexpr unsigned int MAX_MILLIS_STRING_LENGTH = 32;
+constexpr unsigned int MAX_TEMP_FILE_PATH_LENGTH = MAX_LOG_PATH_LENGTH + 4;
+constexpr unsigned int MAX_LOG_MESSAGE_LENGTH = 64;
+constexpr unsigned int MAX_FILE_LENGTH = 32;
+constexpr unsigned int MAX_FUNCTION_LENGTH = 32;
+constexpr unsigned int MAX_INTERNAL_LOG_LENGTH = 128;
 
 constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
@@ -82,6 +164,14 @@ struct LogEntry {
     char file[MAX_FILE_LENGTH];
     char function[MAX_FUNCTION_LENGTH];
     char message[MAX_MESSAGE_LENGTH];
+
+    LogEntry()
+        : unixTimeMilliseconds(0), millis(0), level(LogLevel::INFO), coreId(0)
+    {
+        file[0] = '\0';
+        function[0] = '\0';
+        message[0] = '\0';
+    }
 
     LogEntry(
         unsigned long long unixTimeMs,
@@ -283,4 +373,31 @@ namespace AdvancedLogger
      * @return unsigned long Total count of logs since boot (or last reset).
      */
     unsigned long getTotalLogCount();
+
+    /**
+     * @brief Gets the number of dropped log entries due to a full queue.
+     *
+     * This method returns the number of log entries that were dropped because the queue was full.
+     *
+     * @return unsigned long Number of dropped log entries.
+     */
+    unsigned long getDroppedCount();
+
+    /**
+     * @brief Gets the number of available spaces in the log queue.
+     *
+     * This method returns the number of log entries that can still be queued before the queue becomes full.
+     *
+     * @return unsigned long Number of available spaces in the log queue, or 0 if queue is not initialized.
+     */
+    unsigned long getQueueSpacesAvailable();
+
+    /**
+     * @brief Gets the number of log entries currently waiting in the log queue.
+     *
+     * This method returns the number of log entries currently waiting to be processed in the queue.
+     *
+     * @return unsigned long Number of messages waiting in the log queue, or 0 if queue is not initialized.
+     */
+    unsigned long getQueueMessagesWaiting();
 };

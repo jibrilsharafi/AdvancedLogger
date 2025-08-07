@@ -2,7 +2,7 @@
 
 // Macros
 #define PROCESS_ARGS(format, line)                       \
-    char message[MAX_LOG_LENGTH];                       \
+    char message[MAX_MESSAGE_LENGTH];                       \
     va_list args;                                        \
     va_start(args, line);                                \
     vsnprintf(message, sizeof(message), format, args); \
@@ -23,6 +23,7 @@ namespace AdvancedLogger
     static unsigned long _warningCount = 0;
     static unsigned long _errorCount = 0;
     static unsigned long _fatalCount = 0;
+    static unsigned long _droppedCount = 0;
 
     File _logFile;
     static FileMode _currentFileMode = FileMode::APPEND;
@@ -46,9 +47,16 @@ namespace AdvancedLogger
     static void _formatMillis(unsigned long long millis, char* buffer, size_t bufferSize);
 
     static LogCallback _callback = nullptr;
-    
-    // Recursion guard to prevent infinite loops when internal logging triggers more logging
-    static bool _internalLogging = false;
+
+    // Queue-based logging system
+    static QueueHandle_t _logQueue = nullptr;
+    static TaskHandle_t _logTaskHandle = nullptr;
+    static bool _queueInitialized = false;
+
+    static void _initLogQueue();
+    static void _destroyLogQueue();
+    static void _logProcessingTask(void* parameter);
+    static void _processLogEntry(const LogEntry& entry);
 
     // Safe internal logging function that doesn't trigger recursion
     static void _internalLog(const char* level, const char* format, ...);
@@ -62,15 +70,158 @@ namespace AdvancedLogger
      */
     static void _internalLog(const char* level, const char* format, ...)
     {
-        char buffer[256];
-        va_list args;
-        va_start(args, format);
-        vsnprintf(buffer, sizeof(buffer), format, args);
-        va_end(args);
-        
-        Serial.printf("[%s] [AdvancedLogger Internal] %s\n", level, buffer);
+        #ifndef ADVANCED_LOGGER_DISABLE_INTERNAL_LOGGING
+            char buffer[MAX_INTERNAL_LOG_LENGTH];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            
+            #ifndef ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING
+                Serial.printf("[%s] [AdvancedLogger] %s\n", level, buffer);
+            #endif
+        #endif
     }
 
+    /**
+     * @brief Initializes the log queue and processing task.
+     *
+     * This function creates the FreeRTOS queue and task for processing log entries.
+     */
+    static void _initLogQueue()
+    {
+        if (_queueInitialized) {
+            return; // Already initialized
+        }
+
+        // Create the queue for log entries
+        size_t queueSize = ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE / sizeof(LogEntry);
+        queueSize = queueSize > 0 ? queueSize : 1; // Ensure at least one entry can be queued
+        _logQueue = xQueueCreate(queueSize, sizeof(LogEntry));
+        if (!_logQueue) {
+            _internalLog("ERROR", "Failed to create log queue");
+            return;
+        }
+
+        // Create the log processing task
+        BaseType_t taskResult = xTaskCreatePinnedToCore(
+            _logProcessingTask,           // Task function
+            "AdvancedLogTask",           // Task name
+            ADVANCED_LOGGER_TASK_STACK_SIZE, // Stack size
+            nullptr,                     // Task parameter
+            ADVANCED_LOGGER_TASK_PRIORITY,   // Priority
+            &_logTaskHandle,             // Task handle
+            ADVANCED_LOGGER_TASK_CORE    // Core ID
+        );
+
+        if (taskResult != pdPASS) {
+            _internalLog("ERROR", "Failed to create log processing task");
+            vQueueDelete(_logQueue);
+            _logQueue = nullptr;
+            return;
+        }
+
+        _queueInitialized = true;
+        _internalLog("DEBUG", "Log queue and task initialized successfully");
+    }
+
+    /**
+     * @brief Destroys the log queue and processing task.
+     *
+     * This function cleans up the FreeRTOS queue and task.
+     */
+    static void _destroyLogQueue()
+    {
+        if (!_queueInitialized) {
+            return; // Not initialized
+        }
+
+        // Delete the task
+        if (_logTaskHandle) {
+            vTaskDelete(_logTaskHandle);
+            _logTaskHandle = nullptr;
+        }
+
+        // Delete the queue
+        if (_logQueue) {
+            vQueueDelete(_logQueue);
+            _logQueue = nullptr;
+        }
+
+        _queueInitialized = false;
+        _internalLog("DEBUG", "Log queue and task destroyed");
+    }
+
+    /**
+     * @brief FreeRTOS task function for processing log entries.
+     *
+     * This task continuously processes log entries from the queue.
+     *
+     * @param parameter Task parameter (unused).
+     */
+    static void _logProcessingTask(void* parameter)
+    {
+        LogEntry entry; // Default constructor values
+
+        while (true) {
+            // Wait for a log entry from the queue
+            if (xQueueReceive(_logQueue, &entry, portMAX_DELAY) == pdTRUE) {
+                _processLogEntry(entry);
+            }
+        }
+    }
+
+    /**
+     * @brief Processes a single log entry.
+     *
+     * This function handles the actual logging operations (console output, file writing, callbacks).
+     *
+     * @param entry The log entry to process.
+     */
+    static void _processLogEntry(const LogEntry& entry)
+    {
+        // Always call the callback if it is set, regardless of log level.
+        // This allows for external handling of log messages
+        if (_callback) {
+            _callback(entry);
+        }
+
+        // If the log level is below the print level and save level, we return early
+        // to avoid unnecessary processing.
+        if ((entry.level < _printLevel) && (entry.level < _saveLevel)) return;
+
+        char messageFormatted[MAX_LOG_LENGTH];
+
+        char timestamp[TIMESTAMP_BUFFER_SIZE];
+        getTimestampIsoUtcFromUnixTimeMilliseconds(entry.unixTimeMilliseconds, timestamp, sizeof(timestamp));
+
+        char formattedMillis[MAX_MILLIS_STRING_LENGTH];
+        _formatMillis(entry.millis, formattedMillis, sizeof(formattedMillis));
+
+        snprintf(
+            messageFormatted,
+            sizeof(messageFormatted),
+            LOG_PRINT_FORMAT,
+            timestamp,
+            formattedMillis,
+            logLevelToString(entry.level, false),
+            entry.coreId,
+            entry.file,
+            entry.function,
+            entry.message);
+
+        #ifndef ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING
+            if (entry.level >= _printLevel) {
+                Serial.println(messageFormatted);
+            }
+        #endif
+
+        #ifndef ADVANCED_LOGGER_DISABLE_FILE_LOGGING
+            if (entry.level >= _saveLevel) {
+                _save(messageFormatted);
+            }
+        #endif
+    }
     
     /**
      * @brief Initializes the AdvancedLogger object.
@@ -82,7 +233,14 @@ namespace AdvancedLogger
      */
     void begin(const char *logFilePath)
     {
-        LOG_DEBUG("AdvancedLogger initializing...");
+        _internalLog("DEBUG", "AdvancedLogger initializing...");
+
+        // Mount LittleFS if not already mounted
+        if (!LittleFS.begin(false)) {
+            Serial.printf("Failed to mount LittleFS. Please mount it before using AdvancedLogger.\n");
+            _internalLog("ERROR", "LittleFS mount failed");
+            return;
+        }
 
         // Initialize _logFilePath with provided path or default
         if (logFilePath && _isValidPath(logFilePath)) {
@@ -100,7 +258,7 @@ namespace AdvancedLogger
 
         if (!_setConfigFromPreferences())
         {
-            LOG_DEBUG("Using default config as preferences were not found");
+            _internalLog("DEBUG", "Using default config as preferences were not found");
         }
 
         // Check if LittleFS is already mounted by trying to open a test file
@@ -116,9 +274,9 @@ namespace AdvancedLogger
                 _internalLog("ERROR", "LittleFS mount failed");
                 return;
             }
-            LOG_DEBUG("LittleFS mounted successfully");
+            _internalLog("DEBUG", "LittleFS mounted successfully");
         } else {
-            LOG_DEBUG("LittleFS already mounted");
+            _internalLog("DEBUG", "LittleFS already mounted");
         }    
         
         // Ensure the directory for the log file exists
@@ -143,7 +301,10 @@ namespace AdvancedLogger
         // Now that the file exists, get the log lines count
         _logLines = getLogLines();
         
-        LOG_DEBUG("AdvancedLogger initialized");
+        // Initialize the queue-based logging system
+        _initLogQueue();
+        
+        _internalLog("DEBUG", "AdvancedLogger initialized");
     }
 
     /**
@@ -155,11 +316,14 @@ namespace AdvancedLogger
     void end()
     {
         if (_logFile) {
-            LOG_INFO("AdvancedLogger ended");
+            _internalLog("INFO", "AdvancedLogger ended");
             _closeLogFile();
         } else {
-            LOG_WARNING("AdvancedLogger end called but log file was not open");
+            _internalLog("WARNING", "AdvancedLogger end called but log file was not open");
         }
+        
+        // Clean up the queue-based logging system
+        _destroyLogQueue();
     }
 
     /**
@@ -277,63 +441,47 @@ namespace AdvancedLogger
     */
     void _log(const char *message, const char *file, const char *function, int line, LogLevel logLevel)
     {
-        // Prevent infinite recursion when internal logging operations trigger more logging
-        if (_internalLogging) { return; }
-
         // We increase the log count regardless of the log level.
         _increaseLogCount(logLevel);
 
-        // First we check if we have any callback, of if the loglevel is below the
-        // print level or save level. If so, we return early (quickier).
+        // Check if queue is initialized
+        if (!_queueInitialized || !_logQueue) {
+            // Fallback to direct logging if queue is not available
+            _internalLog("WARNING", "Log queue not initialized, skipping log entry");
+            return;
+        }
+
+        // First we check if we have any callback, or if the loglevel is below the
+        // print level or save level. If so, we return early (quicker).
         if (!_callback && (logLevel < _printLevel) && (logLevel < _saveLevel)) return;
 
         // Use this instead of millis to avoid rollover after 49 days
         unsigned long long unixTimeMs = _getUnixTimeMilliseconds();
         unsigned long long millis = (esp_timer_get_time() / 1000ULL);
 
-        // Always call the callback if it is set, regardless of log level.
-        // This allows for external handling of log messages
-        if (_callback) {
-            _callback(
-                LogEntry(
-                    unixTimeMs,
-                    millis,
-                    logLevel,
-                    xPortGetCoreID(),
-                    file,
-                    function,
-                    message
-                )
-            );
-        }
-
-        // If the log level is below the print level and save level, we return early
-        // to avoid unnecessary processing.
-        if ((logLevel < _printLevel) && (logLevel < _saveLevel)) return;
-
-        char messageFormatted[MAX_LOG_LENGTH];
-
-        char timestamp[TIMESTAMP_BUFFER_SIZE];
-        getTimestampIsoUtcFromUnixTimeMilliseconds(unixTimeMs, timestamp, sizeof(timestamp));
-
-        char formattedMillis[MAX_MILLIS_STRING_LENGTH];
-        _formatMillis(millis, formattedMillis, sizeof(formattedMillis));
-
-        snprintf(
-            messageFormatted,
-            sizeof(messageFormatted),
-            LOG_PRINT_FORMAT,
-            timestamp,
-            formattedMillis,
-            logLevelToString(logLevel, false),
+        // Create log entry
+        LogEntry entry(
+            unixTimeMs,
+            millis,
+            logLevel,
             xPortGetCoreID(),
             file,
             function,
-            message);
+            message
+        );
 
-        Serial.println(messageFormatted);
+        // If the queue is full, process one entry and then send the new entry
+        if (uxQueueSpacesAvailable(_logQueue) == 0) {
+            _internalLog("DEBUG", "Log queue is full, processing one entry to make space");
+            LogEntry processedEntry;
+            // Process one entry from the queue to make space
+            if (xQueueReceive(_logQueue, &processedEntry, 0) == pdTRUE) {
+                _processLogEntry(processedEntry);
+            }
+        }
 
-        if (logLevel >= _saveLevel) _save(messageFormatted);
+        // Send log entry to queue (non-blocking)
+        if (xQueueSend(_logQueue, &entry, 0) != pdTRUE) _droppedCount++;
     }
 
     /**
@@ -379,7 +527,7 @@ namespace AdvancedLogger
     {
         _printLevel = logLevel;
         _saveConfigToPreferences();
-        LOG_DEBUG("Set print level to %s", logLevelToString(logLevel));
+        _internalLog("DEBUG", "Set print level to %s", logLevelToString(logLevel));
     }
 
     /**
@@ -393,7 +541,7 @@ namespace AdvancedLogger
     {
         _saveLevel = logLevel;
         _saveConfigToPreferences();
-        LOG_DEBUG("Set save level to %s", logLevelToString(logLevel));
+        _internalLog("DEBUG", "Set save level to %s", logLevelToString(logLevel));
     }
 
     /**
@@ -431,7 +579,7 @@ namespace AdvancedLogger
         setSaveLevel(DEFAULT_SAVE_LEVEL);
         setMaxLogLines(DEFAULT_MAX_LOG_LINES);
 
-        LOG_DEBUG("Config set to default");
+        _internalLog("DEBUG", "Config set to default");
     }
 
     unsigned long getVerboseCount() { return _verboseCount; }
@@ -441,6 +589,23 @@ namespace AdvancedLogger
     unsigned long getErrorCount() { return _errorCount; }
     unsigned long getFatalCount() { return _fatalCount; }
     unsigned long getTotalLogCount() { return _verboseCount + _debugCount + _infoCount + _warningCount + _errorCount + _fatalCount; }
+    unsigned long getDroppedCount() { return _droppedCount; }
+
+    unsigned long getQueueSpacesAvailable() 
+    { 
+        if (!_queueInitialized || !_logQueue) {
+            return 0;
+        }
+        return uxQueueSpacesAvailable(_logQueue);
+    }
+    
+    unsigned long getQueueMessagesWaiting() 
+    { 
+        if (!_queueInitialized || !_logQueue) {
+            return 0;
+        }
+        return uxQueueMessagesWaiting(_logQueue);
+    }
     
     void setCallback(LogCallback callback) { _callback = callback; }
     void removeCallback() { _callback = nullptr; }
@@ -458,7 +623,7 @@ namespace AdvancedLogger
 
         // Try to open preferences in read-write mode (this creates namespace if it doesn't exist)
         if (!preferences.begin(PREFERENCES_NAMESPACE, false)) {
-            LOG_DEBUG("Failed to open preferences namespace");
+            _internalLog("DEBUG", "Failed to open preferences namespace");
             // Set default values
             _printLevel = DEFAULT_PRINT_LEVEL;
             _saveLevel = DEFAULT_SAVE_LEVEL;
@@ -468,7 +633,7 @@ namespace AdvancedLogger
         
         // Check if this is a fresh namespace by looking for a key that should always exist
         if (!preferences.isKey("printLevel")) {
-            LOG_DEBUG("Fresh preferences namespace detected, initializing with defaults");
+            _internalLog("DEBUG", "Fresh preferences namespace detected, initializing with defaults");
             // This is a new/empty namespace, set defaults and save them
             preferences.putInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
             preferences.putInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
@@ -478,7 +643,7 @@ namespace AdvancedLogger
             _saveLevel = DEFAULT_SAVE_LEVEL;
             _maxLogLines = DEFAULT_MAX_LOG_LINES;
         } else {
-            LOG_DEBUG("Loading existing preferences");
+            _internalLog("DEBUG", "Loading existing preferences");
             // Load existing values
             int printLevelInt = preferences.getInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
             _printLevel = static_cast<LogLevel>(printLevelInt);
@@ -491,7 +656,7 @@ namespace AdvancedLogger
         
         preferences.end();
 
-        LOG_DEBUG("Config loaded from preferences");
+        _internalLog("DEBUG", "Config loaded from preferences");
         return true;
     }
 
@@ -506,7 +671,7 @@ namespace AdvancedLogger
 
         // Try to open in read-write mode (this will create the namespace if it doesn't exist)
         if (!preferences.begin(PREFERENCES_NAMESPACE, false)) {
-            LOG_DEBUG("Failed to open preferences for writing");
+            _internalLog("DEBUG", "Failed to open preferences for writing");
             return;
         }
         
@@ -516,7 +681,7 @@ namespace AdvancedLogger
         
         preferences.end();
 
-        LOG_DEBUG("Config saved to preferences");
+        _internalLog("DEBUG", "Config saved to preferences");
     }
 
     /**
@@ -528,7 +693,7 @@ namespace AdvancedLogger
     */
     void setMaxLogLines(unsigned long maxLogLines)
     {
-        LOG_DEBUG("Setting max log lines to %d", maxLogLines);
+        _internalLog("DEBUG", "Setting max log lines to %d", maxLogLines);
         _maxLogLines = maxLogLines;
         _saveConfigToPreferences();
     }
@@ -608,7 +773,7 @@ namespace AdvancedLogger
 
         // Count lines first
         size_t totalLines = 0;
-        char lineBuffer[MAX_LOG_LINE_LENGTH];
+        char lineBuffer[MAX_MESSAGE_LENGTH];
         while (_logFile.available() && totalLines < MAX_WHILE_LOOP_COUNT) {
             if (_logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1) > 0) {
                 totalLines++;
@@ -676,10 +841,7 @@ namespace AdvancedLogger
         _logLines++;
 
         if (_logLines >= _maxLogLines) {
-            // Set internal logging flag to prevent recursion during log cleanup
-            _internalLogging = true;
             clearLogKeepLatestXPercent();
-            _internalLogging = false;
         }
     }
 
@@ -692,7 +854,7 @@ namespace AdvancedLogger
     */
     void dump(Stream &stream)
     {
-        LOG_DEBUG("Dumping log to Stream...");
+        _internalLog("DEBUG", "Dumping log to Stream...");
 
         if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
@@ -704,7 +866,7 @@ namespace AdvancedLogger
         }
         stream.flush();
 
-        LOG_DEBUG("Log dumped to Stream");
+        _internalLog("DEBUG", "Log dumped to Stream");
     }
 
     /**

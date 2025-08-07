@@ -14,6 +14,15 @@
 
 A **simple** logging library capable of **saving logs to memory** and with a **comprehensive format** capable of including all the accessory information to each message. Easily integrated into any project, the **callback function** allows for a wide range of applications, from sending logs to a server to displaying them on a screen.
 
+**Features:**
+- ⚡ **Queue-based non-blocking logging** with configurable task priority and stack size
+- 💾 **File logging** to LittleFS with automatic log rotation
+- 🖥️ **Console output** with detailed formatting
+- 🔧 **Configurable log levels** for both console and file output
+- 📊 **Log counters** and queue monitoring
+- ⚙️ **Callback support** for custom log handling
+- 🚫 **Conditional compilation** to disable specific log levels in production
+
 ## Installing
 
 The library is available on the [PlatformIO registry](https://registry.platformio.org/libraries/jijio/AdvancedLogger), and can be installed by adding the following line to the `platformio.ini` file:
@@ -114,6 +123,57 @@ Example of using the callback:
 
 For a detailed example, see the [basicUsage](examples/basicUsage/basicUsage.ino) and [basicServer](examples/basicServer/basicServer.ino) in the examples folder.
 
+## Queue Configuration
+
+The library uses a **queue-based logging system** for optimal performance. Log messages are sent to a FreeRTOS queue and processed by a separate task, making logging operations **non-blocking**.
+
+### Configuration Options
+
+You can customize the queue behavior by defining these preprocessor constants **before** including the library:
+
+```cpp
+// Queue size (number of log entries that can be queued)
+#define ADVANCED_LOGGER_QUEUE_SIZE 64         // Default: 32
+
+// Task configuration
+#define ADVANCED_LOGGER_TASK_STACK_SIZE 8192  // Default: 4096 bytes
+#define ADVANCED_LOGGER_TASK_PRIORITY 2       // Default: 1
+#define ADVANCED_LOGGER_TASK_CORE 1           // Default: tskNO_AFFINITY
+
+// Message configuration
+#define ADVANCED_LOGGER_MAX_MESSAGE_LENGTH 512 // Default: 256
+
+#include "AdvancedLogger.h"
+```
+
+### In PlatformIO
+
+Add to your `platformio.ini`:
+
+```ini
+build_flags = 
+    -DADVANCED_LOGGER_QUEUE_SIZE=64
+    -DADVANCED_LOGGER_TASK_STACK_SIZE=8192
+    -DADVANCED_LOGGER_TASK_PRIORITY=2
+    -DADVANCED_LOGGER_MAX_MESSAGE_LENGTH=512
+```
+
+### Queue Monitoring
+
+Monitor queue status with these functions:
+
+```cpp
+// Get available spaces in the queue
+unsigned long available = AdvancedLogger::getQueueSpacesAvailable();
+
+// Get messages waiting to be processed
+unsigned long waiting = AdvancedLogger::getQueueMessagesWaiting();
+
+LOG_INFO("Queue status - Available: %lu, Waiting: %lu", available, waiting);
+```
+
+**Note:** If the queue becomes full, new log messages are dropped (non-blocking behavior) to prevent the calling thread from being blocked.
+
 ## Contributing
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**. If you'd like to contribute, please fork the repository and use a feature branch. Pull requests are warmly welcome.
@@ -126,10 +186,11 @@ For more information regarding the necessity of this library, see the [WHY.md](W
 - [x] **Log to SD card**: the ability to log to an external SD card would be a great addition, as it would allow to store a much larger amount of logs.
 - [x] **Remove ArduinoJson dependency**: the library is used only for the configuration file, and as such it could be removed by implementing a simpler configuration in .txt format.
 - [x] **Upgrade to LittleFS**: migrated from SPIFFS to LittleFS and moved configuration to ESP32 Preferences (NVS) for better reliability and performance.
+- [x] **Queue-based logging**: implemented non-blocking queue-based logging system with configurable task priority and stack size for optimal performance.
 - [ ] **Test other microcontrollers**: the library is currently tested only on the ESP32, but it should be tested on other microcontrollers to ensure compatibility. The *ESP8266* has been tested, but full compatibility has not been achieved yet.
 - [x] **MQTT integration**: the ability to send logs to an MQTT server would be a great addition, as it would allow to monitor the device remotely.
 - [x] **Consistent spacing**: the spacing between the different parts of the log should be consistent, to make it easier to read.
-- [ ] **Buffered logging**: the ability to buffer the logs and send them in chunks would be a great addition, as it would allow to save power and reduce the number of writes to the memory. This has been tested, but the results did not show any significant improvement in speed.
+- [x] **Queue-based logging**: implemented queue-based non-blocking logging system that processes log entries asynchronously for improved performance.
 - [x] **New APIs**: the logging APIs should be updated to be more consistent with the usual logging APIs, such as log.debug(...), log.info(...), log.error(...), etc.
 - [x] **Customizable paths**: allow to set a custom path when creating the AdvancedLogger object, to allow for different log files.
 - [x] **Custom timestamp format**: the ability to set a custom timestamp format would be a great addition, as it would allow to adapt the logs to different needs and regions.
