@@ -10,6 +10,8 @@ AdvancedLogger  KEYWORD1
 ####################################################################################################
 # AdvancedLogger functions and methods
 ####################################################################################################
+begin           KEYWORD2
+end             KEYWORD2
 verbose         KEYWORD2
 debug           KEYWORD2
 info            KEYWORD2
@@ -20,11 +22,17 @@ setPrintLevel   KEYWORD2
 setSaveLevel    KEYWORD2
 getPrintLevel   KEYWORD2
 getSaveLevel    KEYWORD2
-setDefaultLogLevels KEYWORD2
+setDefaultConfig KEYWORD2
 setMaxLogLines  KEYWORD2
 getLogLines     KEYWORD2
 clearLog        KEYWORD2
-dumpToSerial    KEYWORD2
+clearLogKeepLatestXPercent KEYWORD2
+dump            KEYWORD2
+setCallback     KEYWORD2
+removeCallback  KEYWORD2
+logLevelToString KEYWORD2
+logLevelToStringLower KEYWORD2
+getTimestampIsoUtcFromUnixTimeMilliseconds KEYWORD2
 getVerboseCount KEYWORD2
 getDebugCount   KEYWORD2
 getInfoCount    KEYWORD2
@@ -32,10 +40,13 @@ getWarningCount KEYWORD2
 getErrorCount   KEYWORD2
 getFatalCount   KEYWORD2
 getTotalLogCount KEYWORD2
+getDroppedCount KEYWORD2
 resetLogCounters KEYWORD2
+getQueueSpacesAvailable KEYWORD2
+getQueueMessagesWaiting KEYWORD2
 
 ####################################################################################################
-# AdvancedLogger constants
+# AdvancedLogger constants and macros
 ####################################################################################################
 LogLevel::VERBOSE KEYWORD3
 LogLevel::DEBUG   KEYWORD3
@@ -43,3 +54,17 @@ LogLevel::INFO    KEYWORD3
 LogLevel::WARNING KEYWORD3
 LogLevel::ERROR   KEYWORD3
 LogLevel::FATAL   KEYWORD3
+
+LOG_VERBOSE     KEYWORD2
+LOG_DEBUG       KEYWORD2
+LOG_INFO        KEYWORD2
+LOG_WARNING     KEYWORD2
+LOG_ERROR       KEYWORD2
+LOG_FATAL       KEYWORD2
+
+FileMode::APPEND KEYWORD3
+FileMode::READ   KEYWORD3
+FileMode::WRITE  KEYWORD3
+
+LogEntry        KEYWORD1
+LogCallback     KEYWORD1

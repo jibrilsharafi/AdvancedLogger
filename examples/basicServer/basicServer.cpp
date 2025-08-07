@@ -5,7 +5,6 @@
  *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Created: 21/03/2024
- * Last modified: 22/05/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -17,7 +16,7 @@
  */
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
@@ -25,12 +24,6 @@
 #include "AdvancedLogger.h"
 
 const char *customLogPath = "/customPath/log.txt";
-const char *customConfigPath = "/customPath/config.txt";
-const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
-AdvancedLogger logger(
-    customLogPath,
-    customConfigPath,
-    customTimestampFormat);
 
 AsyncWebServer server(80);
 
@@ -41,28 +34,26 @@ const char *ntpServer2 = "time.nist.gov";
 const char *ntpServer3 = "time.windows.com";
 
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
-const char *ssid = "YOUR_SSID";
-const char *password = "YOUR_PASSWORD";
+const char *ssid = "SSID";
+const char *password = "PASSWORD";
 
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
 
-static const char* TAG = "main";
-
 void setup()
 {
-    // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
     // --------------------
     Serial.begin(115200);
 
-    if (!SPIFFS.begin(true)) // Setting to true will format the SPIFFS if mounting fails
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        Serial.println("An Error has occurred while mounting LittleFS");
     }
 
-    logger.begin();
+    AdvancedLogger::begin(customLogPath);
 
-    logger.debug("AdvancedLogger setup done!", TAG);
+    LOG_DEBUG("AdvancedLogger setup done!");
     
     // Connect to WiFi
     // --------------------
@@ -72,51 +63,50 @@ void setup()
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(1000);
-        logger.info("Connecting to WiFi... SSID: %s | Password: ***", TAG, ssid);
+        LOG_INFO("Connecting to WiFi... SSID: %s | Password: ***", ssid);
     }
-    
-    logger.info(("IP address: " + WiFi.localIP().toString()).c_str(), TAG);
+
+    LOG_INFO(("IP address: " + WiFi.localIP().toString()).c_str());
 
     configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
 
     // Serve a simple webpage with a button that sends the user to the page /log and /config
     // --------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button><br><br><button onclick=\"window.location.href='/config'\">Explore the configuration</button>"); });
+              { request->send(200, "text/html", "<button onclick=\"window.location.href='/log'\">Explore the logs</button>"); });
     
-    server.serveStatic("/log", SPIFFS, customLogPath);
-    server.serveStatic("/config", SPIFFS, customConfigPath);
+    server.serveStatic("/log", LittleFS, customLogPath);
     
     server.onNotFound([](AsyncWebServerRequest *request)
                       { request->send(404, "text/plain", "Not found"); });
     server.begin();
     
-    logger.info("Server started!", TAG);
+    LOG_DEBUG("Server started!");
 
-    logger.info("Setup done!", TAG);
+    LOG_INFO("Setup done!");
 }
 
 void loop()
 {
-    logger.debug("This is a debug message!", TAG);
+    LOG_DEBUG("This is a debug message!");
     delay(500);
-    logger.info("This is an info message!!", TAG);
+    LOG_INFO("This is an info message!!");
     delay(500);
-    logger.warning("This is a warning message!!!", TAG);
+    LOG_WARNING("This is a warning message!!!");
     delay(500);
-    logger.error("This is a error message!!!!", TAG);
+    LOG_ERROR("This is a error message!!!!");
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", TAG);
+    LOG_FATAL("This is a fatal message!!!!!");
     delay(500);
-    logger.info("This is an info message!!", TAG, true);
-    delay(1000);;
+    LOG_INFO("This is an info message!!", true);
+    delay(1000);
 
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
-        logger.info("Current number of log lines: %d", TAG, logger.getLogLines());
-        logger.clearLog();
-        logger.setDefaultConfig();
-        logger.warning("Log cleared!", TAG);
+        LOG_INFO("Current number of log lines: %d", AdvancedLogger::getLogLines());
+        AdvancedLogger::clearLog();
+        AdvancedLogger::setDefaultConfig();
+        LOG_WARNING("Log cleared!");
 
         lastMillisLogClear = millis();
     }

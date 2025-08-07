@@ -5,7 +5,6 @@
  *
  * Author: Jibril Sharafi, @jibrilsharafi
  * Created: 21/03/2024
- * Last modified: 24/08/2024
  * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
@@ -23,22 +22,11 @@
  */
 
 #include <Arduino.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 
 #include "AdvancedLogger.h"
 
 const char *customLogPath = "/customPath/log.txt";
-const char *customConfigPath = "/customPath/config.txt";
-// For more info on formatting, see https://www.cplusplus.com/reference/ctime/strftime/
-const char *customTimestampFormat = "%Y-%m-%d %H:%M:%S"; 
-
-AdvancedLogger logger(
-    customLogPath,
-    customConfigPath,
-    customTimestampFormat);
-// If you don't want to set custom paths and timestamp format, you can 
-// just use the default constructor:
-// AdvancedLogger logger;
 
 // Set the custom print and save levels
 LogLevel printLevel = LogLevel::INFO;
@@ -55,85 +43,83 @@ const char *logDumpPath = "/logDump.txt";
 long lastMillisLogClear = 0;
 const long intervalLogClear = 30000;
 
-static const char* TAG = "main";
-
 void setup()
 {
-    // Initialize Serial and SPIFFS (mandatory for the AdvancedLogger library)
+    // Initialize Serial and LittleFS (mandatory for the AdvancedLogger library)
     // --------------------
     Serial.begin(115200);
 
-    if (!SPIFFS.begin(true)) // Setting to true will format the SPIFFS if mounting fails
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        Serial.println("An Error has occurred while mounting LittleFS");
     }
 
     // Initialize the logger
-    logger.begin();
+    AdvancedLogger::begin(customLogPath);
     
     // Setting the print and save levels (optional)
-    logger.setPrintLevel(printLevel);
-    logger.setSaveLevel(saveLevel);
+    AdvancedLogger::setPrintLevel(printLevel);
+    AdvancedLogger::setSaveLevel(saveLevel);
 
     // Set the maximum number of log lines before the log is cleared (optional)
-    logger.setMaxLogLines(maxLogLines);
+    AdvancedLogger::setMaxLogLines(maxLogLines);
 
-    logger.debug("AdvancedLogger setup done!", TAG);
+    LOG_DEBUG("AdvancedLogger setup done!");
    
     lastMillisLogDump = millis();
     lastMillisLogClear = millis();
 
-    logger.info("Setup done!", TAG);
+    LOG_INFO("Setup done!");
 }
 
 void loop()
 {
-    logger.verbose("This is a verbose message", TAG);
+    LOG_VERBOSE("This is a verbose message");
     delay(500);
-    logger.debug("This is a debug message!", TAG);
+    LOG_DEBUG("This is a debug message!");
     delay(500);
-    logger.info("This is an info message!!", TAG);
+    LOG_INFO("This is an info message!!");
     delay(500);
-    logger.warning("This is a warning message!!!", TAG);
+    LOG_WARNING("This is a warning message!!!");
     delay(500);
-    logger.error("This is a error message!!!!", TAG);
+    LOG_ERROR("This is a error message!!!!");
     delay(500);
-    logger.fatal("This is a fatal message!!!!!", TAG);
+    LOG_FATAL("This is a fatal message!!!!!");
     delay(500);
 
-    logger.info("Testing printf functionality: %d, %f, %s", TAG, 1, 2.0, "three");
+    LOG_INFO("Testing printf functionality: %d, %f, %s", 1, 2.0, "three");
     delay(500);
     
     // Get the current print and save levels
-    String printLevel = logger.logLevelToString(logger.getPrintLevel());
-    String saveLevel = logger.logLevelToString(logger.getSaveLevel());
+    String printLevel = AdvancedLogger::logLevelToString(AdvancedLogger::getPrintLevel());
+    String saveLevel = AdvancedLogger::logLevelToString(AdvancedLogger::getSaveLevel());
 
     if (millis() - lastMillisLogDump > intervalLogDump)
     {
         // Print the current number of log lines
-        logger.info("Current number of log lines: %d", TAG, logger.getLogLines());
+        LOG_INFO("Current number of log lines: %d", AdvancedLogger::getLogLines());
 
         // Dump the log to Serial
-        logger.info("Dumping log to Serial...", TAG);
-        logger.dump(Serial);
-        logger.info("Log dumped!", TAG);
+        LOG_INFO("Dumping log to Serial...");
+        AdvancedLogger::dump(Serial);
+        LOG_INFO("Log dumped!");
 
         // Dump the log to another file
-        logger.info("Dumping log to file...", TAG);
-        File tempFile = SPIFFS.open(logDumpPath, "w");
-        logger.dump(tempFile);
+        LOG_INFO("Dumping log to file...");
+        File tempFile = LittleFS.open(logDumpPath, "w");
+        AdvancedLogger::dump(tempFile);
         tempFile.close();
-        logger.info("Log dumped!", TAG);
+        LOG_INFO("Log dumped!");
 
         // Ensure the log has been dumped correctly
-        logger.info("Printing the temporary log dump file...", TAG);
-        tempFile = SPIFFS.open(logDumpPath, "r");
+        LOG_INFO("Printing the temporary log dump file...");
+        tempFile = LittleFS.open(logDumpPath, "r");
         while (tempFile.available())
         {
             Serial.write(tempFile.read());
         }
         tempFile.close();
-        logger.info("Log dump file printed!", TAG);
+        LOG_INFO("Log dump file printed!");
 
         lastMillisLogDump = millis();
     }
@@ -141,12 +127,12 @@ void loop()
     if (millis() - lastMillisLogClear > intervalLogClear)
     {
         // Clear the log and set the default configuration
-        logger.clearLogKeepLatestXPercent(50);
+        AdvancedLogger::clearLogKeepLatestXPercent(50);
         // If you want to clear the log without keeping the latest X percent of the log, use:
-        // logger.clearLog();
-        logger.setDefaultConfig();
+        // AdvancedLogger::clearLog();
+        AdvancedLogger::setDefaultConfig();
 
-        logger.info("Log cleared and default configuration set!", TAG);
+        LOG_INFO("Log cleared and default configuration set!");
 
         lastMillisLogClear = millis();
     }

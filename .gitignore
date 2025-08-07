@@ -39,3 +39,6 @@ platformio.ini
 .pio/
 src/test.cpp
 src/main.cpp
+
+# Mac OS
+.DS_Store
