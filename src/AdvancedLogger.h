@@ -20,18 +20,25 @@
 #include <Preferences.h>
 #include <cstring>
 
-#include <vector>
-
 // TODOs:
 // - Use defines
-// - Buffering logs for writing
 // - Use macros so that the tag does not need to be passed
 // - Global flags to remove at compile time some logs
+// - Buffering logs for writing
 
+// Legacy macros - consider using new LOG_* macros instead
 #define LOG_D(format, ...) log_d(format, ##__VA_ARGS__)
 #define LOG_I(format, ...) log_i(format, ##__VA_ARGS__)
 #define LOG_W(format, ...) log_w(format, ##__VA_ARGS__)
 #define LOG_E(format, ...) log_e(format, ##__VA_ARGS__)
+
+// New AdvancedLogger macros with automatic file/function/line detection
+#define LOG_VERBOSE(format, ...) AdvancedLogger::verbose(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#define LOG_DEBUG(format, ...)   AdvancedLogger::debug(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#define LOG_INFO(format, ...)    AdvancedLogger::info(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#define LOG_WARNING(format, ...) AdvancedLogger::warning(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(format, ...)   AdvancedLogger::error(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
+#define LOG_FATAL(format, ...)   AdvancedLogger::fatal(format, __FILE__, __func__, __LINE__, ##__VA_ARGS__)
 
 enum class FileMode : int {
     APPEND,   // "a" - append mode
@@ -51,31 +58,33 @@ enum class LogLevel : int {
 constexpr const LogLevel DEFAULT_PRINT_LEVEL = LogLevel::DEBUG;
 constexpr const LogLevel DEFAULT_SAVE_LEVEL = LogLevel::INFO;
 
-constexpr int MAX_LOG_LENGTH = 1024;
+constexpr unsigned int MAX_MESSAGE_LENGTH = 1024;
+constexpr unsigned int MAX_LOG_LENGTH = MAX_MESSAGE_LENGTH + 128; // Extra space for timestamp, log level, and other metadata
 
 constexpr const char* DEFAULT_LOG_PATH = "/log.txt";
 constexpr const char* PREFERENCES_NAMESPACE = "adv_log_ns";
 
-constexpr int DEFAULT_MAX_LOG_LINES = 1000;
-constexpr int MAX_WHILE_LOOP_COUNT = 10000;
+constexpr unsigned int DEFAULT_MAX_LOG_LINES = 1000;
+constexpr unsigned int MAX_WHILE_LOOP_COUNT = 10000;
 
-constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S.%03u";
-constexpr int TIMESTAMP_BUFFER_SIZE = 32;
+constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ";
+constexpr unsigned int TIMESTAMP_BUFFER_SIZE = 25; // 2024-03-21T12:34:56.789Z (ISO 8601 format with milliseconds) is always 24 characters long
 
 // Buffer sizes for char arrays
-constexpr int MAX_LOG_PATH_LENGTH = 256;
-constexpr int MAX_MILLIS_STRING_LENGTH = 32;  // For formatted milliseconds with spaces
-constexpr int MAX_LOG_LINE_LENGTH = 1024;     // For reading log file lines
-constexpr int MAX_TEMP_FILE_PATH_LENGTH = 260; // Original path + ".tmp" suffix
-constexpr int MAX_LOG_MESSAGE_LENGTH = 64;     // For simple log messages
+constexpr unsigned int MAX_LOG_PATH_LENGTH = 64;
+constexpr unsigned int MAX_MILLIS_STRING_LENGTH = 32;  // For formatted milliseconds with spaces
+constexpr unsigned int MAX_LOG_LINE_LENGTH = 1024;     // For reading log file lines
+constexpr unsigned int MAX_TEMP_FILE_PATH_LENGTH = MAX_LOG_PATH_LENGTH + 4; // Original path + ".tmp" suffix
+constexpr unsigned int MAX_LOG_MESSAGE_LENGTH = 64;     // For simple log messages
 
-constexpr const char* LOG_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FUNCTION] MESSAGE
+constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
 struct LogEntry {
     char timestamp[TIMESTAMP_BUFFER_SIZE];
     unsigned long long millis;
     LogLevel level;
     int coreId;
+    const char* file;
     const char* function;
     const char* message;
 
@@ -84,9 +93,10 @@ struct LogEntry {
         unsigned long long ms, 
         LogLevel lvl, 
         int core, 
+        const char* f,
         const char* func, 
         const char* msg
-    ) : millis(ms), level(lvl), coreId(core), function(func), message(msg) 
+    ) : millis(ms), level(lvl), coreId(core), file(f), function(func), message(msg) 
     { snprintf(timestamp, sizeof(timestamp), "%s", ts); }
 };
 
@@ -97,12 +107,12 @@ namespace AdvancedLogger
     void begin(const char *logFilePath = DEFAULT_LOG_PATH);
     void end();
 
-    void verbose(const char *format, const char *function, ...);
-    void debug(const char *format, const char *function, ...);
-    void info(const char *format, const char *function, ...);
-    void warning(const char *format, const char *function, ...);
-    void error(const char *format, const char *function, ...);
-    void fatal(const char *format, const char *function, ...);
+    void verbose(const char *format, const char *file, const char *function, int line, ...);
+    void debug(const char *format, const char *file, const char *function, int line, ...);
+    void info(const char *format, const char *file, const char *function, int line, ...);
+    void warning(const char *format, const char *file, const char *function, int line, ...);
+    void error(const char *format, const char *file, const char *function, int line, ...);
+    void fatal(const char *format, const char *file, const char *function, int line, ...);
 
     void setPrintLevel(LogLevel logLevel);
     void setSaveLevel(LogLevel logLevel);
@@ -112,10 +122,10 @@ namespace AdvancedLogger
 
     void setDefaultConfig();
 
-    void setMaxLogLines(int maxLogLines);
-    int getLogLines();
+    void setMaxLogLines(unsigned long maxLogLines);
+    unsigned long getLogLines();
     void clearLog();
-    void clearLogKeepLatestXPercent(int percent = 10);
+    void clearLogKeepLatestXPercent(unsigned char percent = 10);
 
     void dump(Stream& stream);
 

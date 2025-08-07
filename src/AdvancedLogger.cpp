@@ -1,14 +1,12 @@
 #include "AdvancedLogger.h"
 
 // Macros
-#define PROCESS_ARGS(format, function)                   \
-    char _message[MAX_LOG_LENGTH];                       \
+#define PROCESS_ARGS(format, line)                       \
+    char message[MAX_LOG_LENGTH];                       \
     va_list args;                                        \
-    va_start(args, function);                            \
-    vsnprintf(_message, sizeof(_message), format, args); \
+    va_start(args, line);                                \
+    vsnprintf(message, sizeof(message), format, args); \
     va_end(args);
-
-static const char *TAG = "advancedlogger";
 
 namespace AdvancedLogger
 {    
@@ -17,8 +15,8 @@ namespace AdvancedLogger
 
     static LogLevel _printLevel = DEFAULT_PRINT_LEVEL;
     static LogLevel _saveLevel = DEFAULT_SAVE_LEVEL;    
-    static int _maxLogLines = DEFAULT_MAX_LOG_LINES;
-    static int _logLines = 0;
+    static unsigned long _maxLogLines = DEFAULT_MAX_LOG_LINES;
+    static unsigned long _logLines = 0;
 
     static unsigned long _verboseCount = 0;
     static unsigned long _debugCount = 0;
@@ -27,11 +25,13 @@ namespace AdvancedLogger
     static unsigned long _errorCount = 0;
     static unsigned long _fatalCount = 0;
 
+    File _logFile;
     static FileMode _currentFileMode = FileMode::APPEND;
 
-    static void _log(const char *format, const char *function, LogLevel logLevel);
+    static void _log(const char *message, const char *file, const char *function, int line, LogLevel logLevel);
     static void _increaseLogCount(LogLevel logLevel);
-    static void _logPrint(const char *format, const char *function, LogLevel logLevel, ...);    File _logFile;
+    static void _logPrint(const char *format, const char *file, const char *function, int line, LogLevel logLevel, ...);   
+    
     
     static void _save(const char *messageFormatted);
     static void _closeLogFile();      
@@ -49,6 +49,30 @@ namespace AdvancedLogger
     static void _formatMillis(unsigned long long millis, char* buffer, size_t bufferSize);
 
     static LogCallback _callback = nullptr;
+    
+    // Recursion guard to prevent infinite loops when internal logging triggers more logging
+    static bool _internalLogging = false;
+
+    // Safe internal logging function that doesn't trigger recursion
+    static void _internalLog(const char* level, const char* format, ...);
+
+    
+    /**
+     * @brief Safe internal logging function that doesn't trigger recursion.
+     * 
+     * This function is used for internal AdvancedLogger operations to avoid
+     * infinite recursion when logging operations themselves need to log.
+     */
+    static void _internalLog(const char* level, const char* format, ...)
+    {
+        char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+        
+        Serial.printf("[%s] [AdvancedLogger Internal] %s\n", level, buffer);
+    }
 
     
     /**
@@ -61,11 +85,11 @@ namespace AdvancedLogger
      */
     void begin(const char *logFilePath)
     {
-        debug("AdvancedLogger initializing...", TAG);
+        LOG_DEBUG("AdvancedLogger initializing...");
 
         // Initialize _logFilePath with provided path or default
         if (logFilePath && _isValidPath(logFilePath)) {
-            sniprintf(_logFilePath, MAX_LOG_PATH_LENGTH, "%s", logFilePath);
+            snprintf(_logFilePath, MAX_LOG_PATH_LENGTH, "%s", logFilePath);
         } else {
             if (logFilePath) {
                 Serial.printf(
@@ -79,7 +103,7 @@ namespace AdvancedLogger
 
         if (!_setConfigFromPreferences())
         {
-            debug("Using default config as preferences were not found", TAG);
+            LOG_DEBUG("Using default config as preferences were not found");
         }
 
         // Check if LittleFS is already mounted by trying to open a test file
@@ -92,12 +116,12 @@ namespace AdvancedLogger
             bool littleFsMounted = LittleFS.begin(false);
             if (!littleFsMounted) {
                 Serial.printf("Failed to mount LittleFS. Please mount it before using AdvancedLogger.\n");
-                error("LittleFS mount failed", TAG);
+                _internalLog("ERROR", "LittleFS mount failed");
                 return;
             }
-            debug("LittleFS mounted successfully", TAG);
+            LOG_DEBUG("LittleFS mounted successfully");
         } else {
-            debug("LittleFS already mounted", TAG);
+            LOG_DEBUG("LittleFS already mounted");
         }    
         
         // Ensure the directory for the log file exists
@@ -107,7 +131,7 @@ namespace AdvancedLogger
             snprintf(_logFilePath, MAX_LOG_PATH_LENGTH, "%s", DEFAULT_LOG_PATH);
             if (!_ensureDirectoryExists(_logFilePath)) {
                 Serial.printf("Failed to create directory for default log file %s\n", _logFilePath);
-                error("Log file directory creation failed", TAG);
+                _internalLog("ERROR", "Log file directory creation failed");
                 return;
             }
         }
@@ -115,14 +139,14 @@ namespace AdvancedLogger
         bool isLogFileOpen = _checkAndOpenLogFile(FileMode::APPEND);
         if (!isLogFileOpen) {
             Serial.printf("Failed to open log file %s\n", _logFilePath);
-            error("Log file opening failed", TAG);
+            _internalLog("ERROR", "Log file opening failed");
             return;
         }
         
         // Now that the file exists, get the log lines count
         _logLines = getLogLines();
         
-        debug("AdvancedLogger initialized", TAG);
+        LOG_DEBUG("AdvancedLogger initialized");
     }
 
     /**
@@ -134,115 +158,131 @@ namespace AdvancedLogger
     void end()
     {
         if (_logFile) {
-            info("AdvancedLogger ended", TAG);
+            LOG_INFO("AdvancedLogger ended");
             _closeLogFile();
         } else {
-            warning("AdvancedLogger end called but log file was not open", TAG);
+            LOG_WARNING("AdvancedLogger end called but log file was not open");
         }
     }
 
     /**
      * @brief Logs a verbose message.
      *
-     * This method logs a verbose message with the provided format and function name.
+     * This method logs a verbose message with the provided format and location information.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void verbose(const char *format, const char *function = "unknown", ...)
+    void verbose(const char *format, const char *file, const char *function, int line, ...)
     {
-        PROCESS_ARGS(format, function);
-        _log(_message, function, LogLevel::VERBOSE);
+        PROCESS_ARGS(format, line);
+        _log(message, file, function, line, LogLevel::VERBOSE);
     }
 
     /**
      * @brief Logs a debug message.
      *
-     * This method logs a debug message with the provided format and function name.
+     * This method logs a debug message with the provided format and location information.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void debug(const char *format, const char *function = "unknown", ...)
+    void debug(const char *format, const char *file, const char *function, int line, ...)
     {
-        PROCESS_ARGS(format, function);
-        _log(_message, function, LogLevel::DEBUG);
+        PROCESS_ARGS(format, line);
+        _log(message, file, function, line, LogLevel::DEBUG);
     }
 
     /**
      * @brief Logs an info message.
      *
-     * This method logs an info message with the provided format and function name.
+     * This method logs an info message with the provided format and location information.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void info(const char *format, const char *function = "unknown", ...)
+    void info(const char *format, const char *file, const char *function, int line, ...)
     {
-        PROCESS_ARGS(format, function);
-        _log(_message, function, LogLevel::INFO);
+        PROCESS_ARGS(format, line);
+        _log(message, file, function, line, LogLevel::INFO);
     }
 
     /**
      * @brief Logs a warning message.
      *
-     * This method logs a warning message with the provided format and function name.
+     * This method logs a warning message with the provided format and location information.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void warning(const char *format, const char *function = "unknown", ...)
+    void warning(const char *format, const char *file, const char *function, int line, ...)
     {
-        PROCESS_ARGS(format, function);
-        _log(_message, function, LogLevel::WARNING);
+        PROCESS_ARGS(format, line);
+        _log(message, file, function, line, LogLevel::WARNING);
     }
 
     /**
      * @brief Logs an error message.
      *
-     * This method logs an error message with the provided format and function name.
+     * This method logs an error message with the provided format and location information.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void error(const char *format, const char *function = "unknown", ...)
+    void error(const char *format, const char *file, const char *function, int line, ...)
     {
-        PROCESS_ARGS(format, function);
-        _log(_message, function, LogLevel::ERROR);
+        PROCESS_ARGS(format, line);
+        _log(message, file, function, line, LogLevel::ERROR);
     }
 
     /**
      * @brief Logs a fatal message.
      *
-     * This method logs a fatal message with the provided format and function name.
+     * This method logs a fatal message with the provided format and location information.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void fatal(const char *format, const char *function = "unknown", ...)
+    void fatal(const char *format, const char *file, const char *function, int line, ...)
     {
-        PROCESS_ARGS(format, function);
-        _log(_message, function, LogLevel::FATAL);
+        PROCESS_ARGS(format, line);
+        _log(message, file, function, line, LogLevel::FATAL);
     }
 
     /**
      * @brief Logs a message with a specific log level.
      *
-     * This method logs a message with the provided format, function name, and log level.
+     * This method logs a message with the provided format, location information, and log level.
      *
-     * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param message The formatted message to log.
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param logLevel Log level of the message.
-     * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void _log(const char *message, const char *function, LogLevel logLevel)
+    void _log(const char *message, const char *file, const char *function, int line, LogLevel logLevel)
     {
+        // Prevent infinite recursion when internal logging operations trigger more logging
+        if (_internalLogging) { return; }
+
         // We increase the log count regardless of the log level.
         _increaseLogCount(logLevel);
 
@@ -250,21 +290,22 @@ namespace AdvancedLogger
         // print level or save level. If so, we return early (quickier).
         if (!_callback && (logLevel < _printLevel) && (logLevel < _saveLevel)) return;
 
-        // Pre-allocation to avoid computing twice and ensuring consistent values
-        unsigned long long _millis = (esp_timer_get_time() / 1000ULL);
-        char _timestamp[TIMESTAMP_BUFFER_SIZE];
+        // Use this instead of millis to avoid rollover after 49 days
+        unsigned long long millis = (esp_timer_get_time() / 1000ULL);
+        char timestamp[TIMESTAMP_BUFFER_SIZE];
 
-        _getTimestampIsoUtc(_timestamp, sizeof(_timestamp));
+        _getTimestampIsoUtc(timestamp, sizeof(timestamp));
 
         // Always call the callback if it is set, regardless of log level.
         // This allows for external handling of log messages
         if (_callback) {
             _callback(
                 LogEntry(
-                    _timestamp,
-                    _millis,
+                    timestamp,
+                    millis,
                     logLevel,
                     xPortGetCoreID(),
+                    file,
                     function,
                     message
                 )
@@ -275,25 +316,26 @@ namespace AdvancedLogger
         // to avoid unnecessary processing.
         if ((logLevel < _printLevel) && (logLevel < _saveLevel)) return;
 
-        char _messageFormatted[MAX_LOG_LENGTH];
+        char messageFormatted[MAX_LOG_LENGTH];
 
-        char _formattedMillis[MAX_MILLIS_STRING_LENGTH];
-        _formatMillis(_millis, _formattedMillis, sizeof(_formattedMillis));
+        char formattedMillis[MAX_MILLIS_STRING_LENGTH];
+        _formatMillis(millis, formattedMillis, sizeof(formattedMillis));
 
         snprintf(
-            _messageFormatted,
-            sizeof(_messageFormatted),
-            LOG_FORMAT,
-            _timestamp,
-            _formattedMillis,
+            messageFormatted,
+            sizeof(messageFormatted),
+            LOG_PRINT_FORMAT,
+            timestamp,
+            formattedMillis,
             logLevelToString(logLevel, false),
             xPortGetCoreID(),
+            file,
             function,
             message);
 
-        Serial.println(_messageFormatted);
+        Serial.println(messageFormatted);
 
-        if (logLevel >= _saveLevel) _save(_messageFormatted);
+        if (logLevel >= _saveLevel) _save(messageFormatted);
     }
 
     /**
@@ -331,20 +373,22 @@ namespace AdvancedLogger
     /**
      * @brief Logs a message with a specific log level and prints it.
      *
-     * This method logs a message with the provided format, function name, and log level.
+     * This method logs a message with the provided format, location information, and log level.
      * It also prints the message to the Serial monitor.
      *
      * @param format Format of the message.
-     * @param function Name of the function where the message is logged. 
+     * @param file Name of the file where the message is logged.
+     * @param function Name of the function where the message is logged.
+     * @param line Line number where the message is logged.
      * @param logLevel Log level of the message.
      * @param ... Arguments to be formatted into the message using the printf format.
     */
-    void _logPrint(const char *format, const char *function, LogLevel logLevel, ...)
+    void _logPrint(const char *format, const char *file, const char *function, int line, LogLevel logLevel, ...)
     {
         if (logLevel < _printLevel && (logLevel < _saveLevel)) return;
 
         PROCESS_ARGS(format, logLevel);
-        char logMessage[MAX_LOG_LENGTH + 200];
+        char logMessage[MAX_LOG_LENGTH];
         char timestamp[TIMESTAMP_BUFFER_SIZE];
         char formattedMillis[MAX_MILLIS_STRING_LENGTH];
 
@@ -354,13 +398,14 @@ namespace AdvancedLogger
         snprintf(
             logMessage,
             sizeof(logMessage),
-            LOG_FORMAT,
+            LOG_PRINT_FORMAT,
             timestamp,
             formattedMillis,
             logLevelToString(logLevel, false),
             xPortGetCoreID(),
+            file,
             function,
-            _message);
+            message);
 
         Serial.println(logMessage);
     }
@@ -374,7 +419,7 @@ namespace AdvancedLogger
     */
     void setPrintLevel(LogLevel logLevel)
     {
-        debug("Setting print level to %s", TAG, logLevelToString(logLevel));
+        LOG_DEBUG("Setting print level to %s", logLevelToString(logLevel));
         _printLevel = logLevel;
         _saveConfigToPreferences();
     }
@@ -388,7 +433,7 @@ namespace AdvancedLogger
     */
     void setSaveLevel(LogLevel logLevel)
     {
-        debug("Setting save level to %s", TAG, logLevelToString(logLevel));
+        LOG_DEBUG("Setting save level to %s", logLevelToString(logLevel));
         _saveLevel = logLevel;
         _saveConfigToPreferences();
     }
@@ -424,13 +469,13 @@ namespace AdvancedLogger
     */
     void setDefaultConfig()
     {
-        debug("Setting config to default...", TAG);
+        LOG_DEBUG("Setting config to default...");
 
         setPrintLevel(DEFAULT_PRINT_LEVEL);
         setSaveLevel(DEFAULT_SAVE_LEVEL);
         setMaxLogLines(DEFAULT_MAX_LOG_LINES);
 
-        debug("Config set to default", TAG);
+        LOG_DEBUG("Config set to default");
     }
 
     unsigned long getVerboseCount() { return _verboseCount; }
@@ -453,11 +498,11 @@ namespace AdvancedLogger
     */
     bool _setConfigFromPreferences()
     {
-        debug("Setting config from preferences...", TAG);
+        LOG_DEBUG("Setting config from preferences...");
 
         // Try to open preferences in read-write mode (this creates namespace if it doesn't exist)
         if (!_preferences.begin(PREFERENCES_NAMESPACE, false)) {
-            debug("Failed to open preferences namespace", TAG);
+            LOG_DEBUG("Failed to open preferences namespace");
             // Set default values
             _printLevel = DEFAULT_PRINT_LEVEL;
             _saveLevel = DEFAULT_SAVE_LEVEL;
@@ -467,7 +512,7 @@ namespace AdvancedLogger
         
         // Check if this is a fresh namespace by looking for a key that should always exist
         if (!_preferences.isKey("printLevel")) {
-            debug("Fresh preferences namespace detected, initializing with defaults", TAG);
+            LOG_DEBUG("Fresh preferences namespace detected, initializing with defaults");
             // This is a new/empty namespace, set defaults and save them
             _preferences.putInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
             _preferences.putInt("saveLevel", static_cast<int>(DEFAULT_SAVE_LEVEL));
@@ -477,7 +522,7 @@ namespace AdvancedLogger
             _saveLevel = DEFAULT_SAVE_LEVEL;
             _maxLogLines = DEFAULT_MAX_LOG_LINES;
         } else {
-            debug("Loading existing preferences", TAG);
+            LOG_DEBUG("Loading existing preferences");
             // Load existing values
             int printLevelInt = _preferences.getInt("printLevel", static_cast<int>(DEFAULT_PRINT_LEVEL));
             _printLevel = static_cast<LogLevel>(printLevelInt);
@@ -490,7 +535,7 @@ namespace AdvancedLogger
         
         _preferences.end();
 
-        debug("Config loaded from preferences", TAG);
+        LOG_DEBUG("Config loaded from preferences");
         return true;
     }
 
@@ -501,11 +546,11 @@ namespace AdvancedLogger
     */
     void _saveConfigToPreferences()
     {
-        debug("Saving config to preferences...", TAG);
+        LOG_DEBUG("Saving config to preferences...");
         
         // Try to open in read-write mode (this will create the namespace if it doesn't exist)
         if (!_preferences.begin(PREFERENCES_NAMESPACE, false)) {
-            debug("Failed to open preferences for writing", TAG);
+            LOG_DEBUG("Failed to open preferences for writing");
             return;
         }
         
@@ -515,7 +560,7 @@ namespace AdvancedLogger
         
         _preferences.end();
 
-        debug("Config saved to preferences", TAG);
+        LOG_DEBUG("Config saved to preferences");
     }
 
     /**
@@ -525,11 +570,9 @@ namespace AdvancedLogger
      *
      * @param maxLogLines Maximum number of log lines.
     */
-    void setMaxLogLines(int maxLogLines)
+    void setMaxLogLines(unsigned long maxLogLines)
     {
-        char message[MAX_LOG_MESSAGE_LENGTH];
-        snprintf(message, sizeof(message), "Setting max log lines to %d", maxLogLines);
-        debug(message, TAG);
+        LOG_DEBUG("Setting max log lines to %d", maxLogLines);
         _maxLogLines = maxLogLines;
         _saveConfigToPreferences();
     }
@@ -539,20 +582,20 @@ namespace AdvancedLogger
      *
      * This method returns the number of log lines in the log file.
      *
-     * @return int Number of log lines.
+     * @return unsigned long Number of log lines.
     */
-    int getLogLines()
+    unsigned long getLogLines()
     {
         if (!_checkAndOpenLogFile(FileMode::READ)) {
             // If file doesn't exist or can't be opened, return 0
             return 0;
         }
 
-        int lines = 0;
-        int _loopCount = 0;
-        while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT)
+        unsigned int lines = 0;
+        unsigned int loopCount = 0;
+        while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT)
         {
-            _loopCount++;
+            loopCount++;
             if (_logFile.read() == '\n')
             {
                 lines++;
@@ -594,7 +637,7 @@ namespace AdvancedLogger
         // File is truncated when opened in "w" mode, so just close it
         _closeLogFile();
         _logLines = 0;
-        _logPrint("Log cleared", TAG, LogLevel::INFO);
+        _internalLog("INFO", "Log cleared");
     }
 
     /**
@@ -603,7 +646,7 @@ namespace AdvancedLogger
      * This method clears the log file but retains the latest X percent of log entries.
      * The default value is 10%.
      */
-    void clearLogKeepLatestXPercent(int percent) 
+    void clearLogKeepLatestXPercent(unsigned char percent) 
     {
         if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
@@ -619,8 +662,9 @@ namespace AdvancedLogger
         // Reopen for reading from beginning
         if (!_reopenLogFile(FileMode::READ)) return;
 
-        // Calculate lines to keep/skip
-        percent = min(max(percent, 0), 100);
+        // Min don't work without casting, so we use this poor man's clamping
+        percent = percent > 100 ? 100 : percent;
+
         size_t linesToKeep = (totalLines * percent) / 100;
         size_t linesToSkip = totalLines - linesToKeep;
 
@@ -629,7 +673,7 @@ namespace AdvancedLogger
         
         File tempFile = LittleFS.open(tempFilePath, "w");
         if (!tempFile) {
-            _logPrint("Failed to create temp file", TAG, LogLevel::ERROR);
+            _internalLog("ERROR", "Failed to create temp file");
             _closeLogFile();
             return;
         }
@@ -640,14 +684,14 @@ namespace AdvancedLogger
         }
 
         // Direct copy of remaining lines
-        int _loopCount = 0;
-        while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT) {
+        int loopCount = 0;
+        while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT) {
             int bytesRead = _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
             if (bytesRead > 0) {
                 lineBuffer[bytesRead] = '\0';
                 tempFile.println(lineBuffer);
             }
-            _loopCount++;
+            loopCount++;
         }
 
         _closeLogFile();
@@ -657,7 +701,7 @@ namespace AdvancedLogger
         LittleFS.rename(tempFilePath, _logFilePath);
 
         _logLines = linesToKeep;
-        _logPrint("Log cleared keeping latest entries", TAG, LogLevel::INFO);
+        _internalLog("INFO", "Log cleared keeping latest entries");
     }
 
     /**
@@ -675,7 +719,12 @@ namespace AdvancedLogger
         _logFile.flush(); // Ensure data is written to flash
         _logLines++;
 
-        if (_logLines >= _maxLogLines) clearLogKeepLatestXPercent();
+        if (_logLines >= _maxLogLines) {
+            // Set internal logging flag to prevent recursion during log cleanup
+            _internalLogging = true;
+            clearLogKeepLatestXPercent();
+            _internalLogging = false;
+        }
     }
 
     /**
@@ -687,34 +736,47 @@ namespace AdvancedLogger
     */
     void dump(Stream &stream)
     {
-        debug("Dumping log to Stream...", TAG);
+        LOG_DEBUG("Dumping log to Stream...");
 
         if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
-        int _loopCount = 0;
-        while (_logFile.available() && _loopCount < MAX_WHILE_LOOP_COUNT)
+        int loopCount = 0;
+        while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT)
         {
-            _loopCount++;
+            loopCount++;
             stream.write(static_cast<uint8_t>(_logFile.read()));
         }
         stream.flush();
 
-        debug("Log dumped to Stream", TAG);
+        LOG_DEBUG("Log dumped to Stream");
     }
 
     /**
      * @brief Gets the timestamp.
      *
-     * This method gets the timestamp in ISO UTC format and stores it in the provided buffer.
+     * This method gets the timestamp in ISO UTC format with milliseconds and stores it in the provided buffer.
      *
      * @param buffer Buffer to store the timestamp.
      * @param bufferSize Size of the buffer.
     */
     void _getTimestampIsoUtc(char* buffer, size_t bufferSize)
     {
-        time_t _time = time(nullptr);
-        struct tm _timeinfo = *gmtime(&_time);
-        strftime(buffer, bufferSize, DEFAULT_TIMESTAMP_FORMAT, &_timeinfo);
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        
+        struct tm utc_tm;
+        gmtime_r(&tv.tv_sec, &utc_tm);
+        // Ensure milliseconds is constrained to 0-999 range and use int type
+        int milliseconds = (int)((tv.tv_usec / 1000) % 1000);
+        
+        snprintf(buffer, bufferSize, DEFAULT_TIMESTAMP_FORMAT,
+                utc_tm.tm_year + 1900,
+                utc_tm.tm_mon + 1,
+                utc_tm.tm_mday,
+                utc_tm.tm_hour,
+                utc_tm.tm_min,
+                utc_tm.tm_sec,
+                milliseconds);
     }
 
     /**
@@ -786,12 +848,12 @@ namespace AdvancedLogger
         size_t dirLen = lastSlash - filePath;
         if (dirLen == 0) {
             // File is in root directory (path starts with /), no need to create directory
-            debug("File is in root directory, no directory creation needed", TAG);
+            _internalLog("DEBUG", "File is in root directory, no directory creation needed");
             return true;
         }
         
         if (dirLen >= MAX_LOG_PATH_LENGTH) {
-            debug("Directory path too long", TAG);
+            _internalLog("DEBUG", "Directory path too long");
             return false;
         }
         
@@ -801,7 +863,7 @@ namespace AdvancedLogger
         // Try to create the directory first - if it already exists, this will fail but that's ok
         // This avoids the error when trying to open a non-existent directory
         if (LittleFS.mkdir(dirPath)) {
-            debug("Directory created: %s", TAG, dirPath);
+            _internalLog("DEBUG", "Directory created: %s", dirPath);
             return true;
         }
         
@@ -809,12 +871,12 @@ namespace AdvancedLogger
         File dir = LittleFS.open(dirPath, "r");
         if (dir && dir.isDirectory()) {
             dir.close();
-            debug("Directory already exists: %s", TAG, dirPath);
+            _internalLog("DEBUG", "Directory already exists: %s", dirPath);
             return true;
         }
         if (dir) dir.close();
-        
-        debug("Failed to create directory: %s", TAG, dirPath);
+
+        _internalLog("DEBUG", "Failed to create directory: %s", dirPath);
         return false;
     }
 
@@ -829,7 +891,7 @@ namespace AdvancedLogger
     */
     void _formatMillis(unsigned long long millisToFormat, char* buffer, size_t bufferSize) {
         // Convert number to string first
-        char numStr[32];
+        char numStr[MAX_MILLIS_STRING_LENGTH];
         snprintf(numStr, sizeof(numStr), "%llu", millisToFormat);
         int len = strlen(numStr);
         
@@ -918,18 +980,18 @@ namespace AdvancedLogger
         
         // If we're trying to read a file that doesn't exist, return false
         if (mode == FileMode::READ && !LittleFS.exists(_logFilePath)) {
-            debug("Log file does not exist for reading: %s", TAG, _logFilePath);
+            _internalLog("DEBUG", "Log file does not exist for reading: %s", _logFilePath);
             return false;
         }
         
         _logFile = LittleFS.open(_logFilePath, _fileModeToString(mode));
         if (_logFile) {
             _currentFileMode = mode;
-            debug("Log file opened in %s mode: %s", TAG, _fileModeToString(mode), _logFilePath);
+            _internalLog("DEBUG", "Log file opened in %s mode: %s", _fileModeToString(mode), _logFilePath);
             return true;
         }
-        
-        debug("Failed to open log file in %s mode: %s", TAG, _fileModeToString(mode), _logFilePath);
+
+        _internalLog("DEBUG", "Failed to open log file in %s mode: %s", _fileModeToString(mode), _logFilePath);
         _currentFileMode = FileMode::APPEND; // Reset to default on failure
         return false;
     }

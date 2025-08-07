@@ -29,13 +29,13 @@
 #include "AdvancedLogger.h"
 
 // HTTP configuration
-const String serverEndpoint = "http://192.168.1.100/test"; // **** CHANGE THIS TO YOUR SERVER ****
+const String serverEndpoint = "http://192.168.1.208:8080/test"; // **** CHANGE THIS TO YOUR SERVER ****
 HTTPClient http;
 
 // MQTT configuration
 const char* mqttServer = "test.mosquitto.org"; // **** CHANGE THIS TO YOUR BROKER ****
 const unsigned int mqttPort = 1883;
-const char* mainTopic = "advancedlogger"; // To see the messages, subscribe to "advancedlogger/+/log/+"
+const char* mainTopic = "advancedlogger"; // To see the messages, use mosquitto_sub -h test.mosquitto.org -p 1883 -t "advancedlogger/+/log/+" -v
 const unsigned int bufferSize = 1024;
 
 // **** CHANGE THESE TO YOUR SSID AND PASSWORD ****
@@ -66,8 +66,6 @@ String getDeviceId() {
     return String((uint32_t)ESP.getEfuseMac(), HEX);
 }
 
-static const char* TAG = "main";
-
 /*
 This callback function will be called by the AdvancedLogger
 whenever a log is generated. It will pass the log information,
@@ -96,12 +94,14 @@ void callback(const LogEntry& entry) {
          "\"millis\":%llu,"
          "\"level\":\"%s\","
          "\"core\":%d,"
+         "\"file\":\"%s\","
          "\"function\":\"%s\","
          "\"message\":\"%s\"}",
         entry.timestamp,
         entry.millis,
         levelStr,
         entry.coreId,
+        entry.file,
         entry.function,
         entry.message);
 
@@ -144,9 +144,9 @@ void reconnectMQTT() {
     while (!mqttClient.connected()) {
         String clientId = "ESP32Client-" + getDeviceId();
         if (mqttClient.connect(clientId.c_str())) {
-            AdvancedLogger::info("MQTT Connected with client ID: %s", TAG, clientId.c_str());
+            LOG_INFO("MQTT Connected with client ID: %s", clientId.c_str());
         } else {
-            AdvancedLogger::error("MQTT Connection failed, rc=%d", TAG, mqttClient.state());
+            LOG_ERROR("MQTT Connection failed, rc=%d", mqttClient.state());
         }
     }
 }
@@ -166,7 +166,7 @@ void setup()
     AdvancedLogger::setMaxLogLines(maxLogLines);
     AdvancedLogger::setCallback(callback);
 
-    AdvancedLogger::debug("AdvancedLogger setup done!", TAG);
+    LOG_DEBUG("AdvancedLogger setup done!");
     
     // Connect to WiFi
     // --------------------
@@ -176,11 +176,11 @@ void setup()
     while (WiFi.status() != WL_CONNECTED)
     {
         delay(1000);
-        AdvancedLogger::info("Connecting to WiFi... SSID: %s | Password: %s", TAG, ssid, password);
+        LOG_INFO("Connecting to WiFi... SSID: %s | Password: %s", ssid, password);
     }
     
-    AdvancedLogger::info(("IP address: " + WiFi.localIP().toString()).c_str(), TAG);
-    AdvancedLogger::info("Device ID: %s", TAG, getDeviceId().c_str());
+    LOG_INFO(("IP address: " + WiFi.localIP().toString()).c_str());
+    LOG_INFO("Device ID: %s", getDeviceId().c_str());
 
     mqttClient.setServer(mqttServer, mqttPort);
     mqttClient.setBufferSize(bufferSize); // Raise the buffer size as the standard one is only 256 bytes
@@ -188,7 +188,7 @@ void setup()
 
     configTime(timeZone, daylightOffset, ntpServer1, ntpServer2, ntpServer3);
     
-    AdvancedLogger::info("Setup done!", TAG);
+    LOG_INFO("Setup done!");
 }
 
 void loop()
@@ -200,24 +200,24 @@ void loop()
 
     // Test a burst of messages to see the performance
     for (int i = 0; i < 10; i++) {
-        AdvancedLogger::verbose("[BURST] This is a verbose message", TAG);
-        AdvancedLogger::debug("[BURST] This is a debug message!", TAG);
-        AdvancedLogger::info("[BURST] This is an info message!!", TAG);
-        AdvancedLogger::warning("[BURST] This is a warning message!!!", TAG);
-        AdvancedLogger::error("[BURST] This is a error message!!!!", TAG);
-        AdvancedLogger::fatal("[BURST] This is a fatal message!!!!!", TAG);
+        LOG_VERBOSE("[BURST] This is a verbose message");
+        LOG_DEBUG("[BURST] This is a debug message!");
+        LOG_INFO("[BURST] This is an info message!!");
+        LOG_WARNING("[BURST] This is a warning message!!!");
+        LOG_ERROR("[BURST] This is a error message!!!!");
+        LOG_FATAL("[BURST] This is a fatal message!!!!!");
     }
 
-    AdvancedLogger::debug("This is a debug message!", TAG);
+    LOG_DEBUG("This is a debug message!");
     delay(500);
-    AdvancedLogger::info("This is an info message!!", TAG);
+    LOG_INFO("This is an info message!!");
     delay(500);
-    AdvancedLogger::warning("This is a warning message!!!", TAG);
+    LOG_WARNING("This is a warning message!!!");
     delay(500);
-    AdvancedLogger::error("This is a error message!!!!", TAG);
+    LOG_ERROR("This is a error message!!!!");
     delay(500);
-    AdvancedLogger::fatal("This is a fatal message!!!!!", TAG);
+    LOG_FATAL("This is a fatal message!!!!!");
     delay(500);
-    AdvancedLogger::info("This is an info message!!", TAG, true);
+    LOG_INFO("This is an info message!!", true);
     delay(1000);
 }
