@@ -3,7 +3,7 @@
  * ----------------------------
  * This example demonstrates integrating AdvancedLogger with MQTT and HTTP logging.
  * It shows how to:
- * - Send logs to a local MQTT broker
+ * - Send logs to a local MQTT broker and an HTTP endpoint
  * - Track logging performance metrics
  * - Handle network reconnections
  * - Format logs as JSON
@@ -14,10 +14,6 @@
  *
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
- * This example covers the addition of a simple web server to the basicUsage, which allows
- * the user to explore the log and configuration files remotely.
- * 
- * All the other advanced usage features are reported in the basicUsage example.
  */
 
 #include <Arduino.h>
@@ -29,7 +25,7 @@
 #include "AdvancedLogger.h"
 
 // HTTP configuration
-const String serverEndpoint = "http://192.168.1.100:8080/test"; // **** CHANGE THIS TO YOUR SERVER ****
+const String serverEndpoint = "http://192.168.1.100:8080/test"; // **** CHANGE THIS TO YOUR SERVER | Look at log_receiver.py ****
 HTTPClient http;
 
 // MQTT configuration
@@ -68,7 +64,7 @@ String getDeviceId() {
 
 /*
 This callback function will be called by the AdvancedLogger
-whenever a log is generated. It will pass the log information,
+whenever a log is processed. It will pass the log information,
 then the function will decide what to do with it (eg. based on
 the level, it may decide to send it to an HTTP endpoint or to 
 set a flag).

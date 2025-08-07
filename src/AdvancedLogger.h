@@ -10,7 +10,10 @@
  * This library is licensed under the MIT License. See the LICENSE file for more information.
  *
  * This library provides advanced logging capabilities for the ESP32, allowing you to log messages
- * to the console, to a file on the LittleFS, and to any callback function.
+ * to the console, to a file on the LittleFS, and to any callback function. Incredibly fast thanks to
+ * a queue-based logging system that processes log entries in a separate task, preventing blocking
+ * the main application thread. It supports various log levels, configurable file paths, and
+ * customizable queue parameters.
  */
 
 #pragma once
@@ -18,32 +21,30 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <Preferences.h>
-#include <cstring>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
 
 /*
  * Queue configuration defines that can be overridden by the user:
- * 
- * - ADVANCED_LOGGER_QUEUE_SIZE: Number of log entries that can be queued (default: 32)
- * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task (default: 4096 bytes)
- * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task (default: 1)
- * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task (default: tskNO_AFFINITY)
- * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages (default: 256)
+ *
+ * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Amount of heap memory allocated for the log queue. The queue size is calculated based on this value.
+ * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task.
+ * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task.
+ * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task.
+ * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages.
  *
  * Usage:
- * In platformio.ini: build_flags = -DADVANCED_LOGGER_QUEUE_SIZE=64
- * In Arduino IDE: Add #define ADVANCED_LOGGER_QUEUE_SIZE 64 before including this header
- * In CMake: add_definitions(-DADVANCED_LOGGER_QUEUE_SIZE=64)
+ * In platformio.ini: build_flags = -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240
+ * In Arduino IDE: Add #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE 10240 before including this header
+ * In CMake: add_definitions(-DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240)
  *
- * Note: The logging system uses a non-blocking queue. If the queue is full, 
- * log messages will be dropped to avoid blocking the calling thread. Use 
- * getQueueSpacesAvailable() and getQueueMessagesWaiting() to monitor queue status.
+ * Note: The logging system uses a non-blocking queue. If the queue is full,
+ * the next log message will be processed synchronously thus blocking for a short period.
  */
 
 #ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
-    #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE (10 * 1024)
+    #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE (12 * 1024) // Computes to 20 entries of 600 bytes each
 #endif
 
 #ifndef ADVANCED_LOGGER_TASK_STACK_SIZE
@@ -74,6 +75,7 @@
  * - ADVANCED_LOGGER_DISABLE_FATAL: Disables FATAL level logging
  * - ADVANCED_LOGGER_DISABLE_FILE_LOGGING: Disables file logging
  * - ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING: Disables console output
+ * - ADVANCED_LOGGER_DISABLE_INTERNAL_LOGGING: Disables internal logging (used for debugging the logger itself)
  *
  * Usage:
  * In platformio.ini: build_flags = -DADVANCED_LOGGER_DISABLE_DEBUG
@@ -211,39 +213,45 @@ namespace AdvancedLogger
 
     void setDefaultConfig();
 
+    /**
+     * @brief Sets the maximum number of log lines before auto-cleanup.
+     * @param maxLogLines Maximum number of log lines.
+     */
     void setMaxLogLines(unsigned long maxLogLines);
+
+    /**
+     * @brief Clears the log but keeps the latest X percent of entries.
+     * 
+     * Useful for log rotation when the log file becomes too large.
+     * Creates a temporary file, copies the latest entries, then replaces the original.
+     * 
+     * @param percent Percentage of latest entries to keep (0-100, default 10)
+     */
+    void clearLogKeepLatestXPercent(unsigned char percent = 10);
+    
     unsigned long getLogLines();
     void clearLog();
-    void clearLogKeepLatestXPercent(unsigned char percent = 10);
 
+    /**
+     * @brief Dumps the entire log content to a Stream.
+     * @param stream Stream to dump the log to (e.g., Serial or an opened file).
+     */
     void dump(Stream& stream);
 
-    void resetLogCounters();
-
-    /**
-     * @brief Sets a callback function to handle log entries.
-     *
-     * This method sets a callback function that will be called for each log entry.
-     *
-     * @param callback The callback function to handle log entries.
-     */
     void setCallback(LogCallback callback);
-    
-    /**
-     * @brief Removes the currently set callback function.
-     *
-     * This method removes the callback function that was previously set.
-     */
     void removeCallback();
 
     /**
      * @brief Converts a log level to a string representation.
-     *
-     * This method converts a log level to its string representation.
-     *
      * @param level The log level to convert.
      * @param trim Whether to trim the string to fit the log format.
-     * @return The string representation of the log level (maximum 8 characters).
+     * @return The string representation of the log level (maximum 8 characters). Values are:
+     * - "VERBOSE"
+     * - "DEBUG"
+     * - "INFO"
+     * - "WARNING"
+     * - "ERROR"
+     * - "FATAL"
      */
     inline const char* logLevelToString(LogLevel level, bool trim = true) {
         switch (level) {
@@ -259,11 +267,14 @@ namespace AdvancedLogger
 
     /**
      * @brief Converts a log level to a lowercase string representation.
-     *
-     * This method converts a log level to its lowercase string representation.
-     *
      * @param level The log level to convert.
-     * @return The lowercase string representation of the log level (maximum 8 characters).
+     * @return The lowercase string representation of the log level (maximum 8 characters). Values are:
+     * - "verbose"
+     * - "debug"
+     * - "info"
+     * - "warning"
+     * - "error"
+     * - "fatal"
      */
     inline const char* logLevelToStringLower(LogLevel level, bool trim = true) {
         switch (level) {
@@ -278,9 +289,9 @@ namespace AdvancedLogger
     }
 
     /**
-     * @brief Formats a given Unix timestamp (in milliseconds) as an ISO 8601 UTC string with milliseconds.
-     *
-     * This function converts the provided Unix time in milliseconds to a string in ISO 8601 UTC format,
+     * @brief Formats a given Unix timestamp (in milliseconds) as an ISO 8601 UTC string.
+     * 
+     * Converts the provided Unix time in milliseconds to a string in ISO 8601 UTC format,
      * including milliseconds, and stores it in the provided buffer.
      *
      * @param unixTimeMilliseconds The Unix timestamp in milliseconds.
@@ -305,99 +316,16 @@ namespace AdvancedLogger
                 milliseconds);
     }
 
-    /**
-     * @brief Gets the total amount of logs for a specific log level.
-     *
-     * This method returns the total amount of logs for the specified log level.
-     *
-     * @param logLevel Log level for which to get the count.
-     * @return unsigned long Total count of logs for the specified log level.
-     */
     unsigned long getVerboseCount();
-    
-    /**
-     * @brief Gets the total amount of logs for a specific log level.
-     *
-     * This method returns the total amount of logs for the specified log level.
-     *
-     * @param logLevel Log level for which to get the count.
-     * @return unsigned long Total count of logs for the specified log level.
-     */
     unsigned long getDebugCount();
-
-    /**
-     * @brief Gets the total amount of logs for a specific log level.
-     *
-     * This method returns the total amount of logs for the specified log level.
-     *
-     * @param logLevel Log level for which to get the count.
-     * @return unsigned long Total count of logs for the specified log level.
-     */
     unsigned long getInfoCount();
-
-    /**
-     * @brief Gets the total amount of logs for a specific log level.
-     *
-     * This method returns the total amount of logs for the specified log level.
-     *
-     * @param logLevel Log level for which to get the count.
-     * @return unsigned long Total count of logs for the specified log level.
-     */
     unsigned long getWarningCount();
-
-    /**
-     * @brief Gets the total amount of logs for a specific log level.
-     *
-     * This method returns the total amount of logs for the specified log level.
-     *
-     * @param logLevel Log level for which to get the count.
-     * @return unsigned long Total count of logs for the specified log level.
-     */
     unsigned long getErrorCount();
-
-    /**
-     * @brief Gets the total amount of logs for a specific log level.
-     *
-     * This method returns the total amount of logs for the specified log level.
-     *
-     * @param logLevel Log level for which to get the count.
-     * @return unsigned long Total count of logs for the specified log level.
-     */
     unsigned long getFatalCount();
-
-    /**
-     * @brief Gets the total amount of logs since boot (or last reset) regardless of print or save level.
-     *
-     * This method returns the total amount of logs since boot (or last reset) regardless of print or save level.
-     *
-     * @return unsigned long Total count of logs since boot (or last reset).
-     */
     unsigned long getTotalLogCount();
-
-    /**
-     * @brief Gets the number of dropped log entries due to a full queue.
-     *
-     * This method returns the number of log entries that were dropped because the queue was full.
-     *
-     * @return unsigned long Number of dropped log entries.
-     */
     unsigned long getDroppedCount();
+    void resetLogCounters();
 
-    /**
-     * @brief Gets the number of available spaces in the log queue.
-     *
-     * This method returns the number of log entries that can still be queued before the queue becomes full.
-     *
-     * @return unsigned long Number of available spaces in the log queue, or 0 if queue is not initialized.
-     */
     unsigned long getQueueSpacesAvailable();
-
-    /**
-     * @brief Gets the number of log entries currently waiting in the log queue.
-     *
-     * This method returns the number of log entries currently waiting to be processed in the queue.
-     *
-     * @return unsigned long Number of messages waiting in the log queue, or 0 if queue is not initialized.
-     */
     unsigned long getQueueMessagesWaiting();
 };

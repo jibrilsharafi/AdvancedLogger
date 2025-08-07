@@ -72,39 +72,39 @@ void loop()
         delay(200);
     }
 
-    // Try a burst of 1000 verbose logs and time it
+    // Try a burst of 100 verbose logs and time it
     unsigned long startTime = millis();
-    LOG_INFO("Starting burst of 1000 verbose logs...");
-    for (int i = 0; i < 1000; ++i) {
+    LOG_INFO("Starting burst of 100 verbose logs...");
+    for (int i = 0; i < 100; ++i) {
         LOG_VERBOSE("Burst verbose log %d", i);
     }
     unsigned long elapsedTime = millis() - startTime;
-    LOG_INFO("Burst of 1000 verbose logs completed in %lu ms (average %.2f us per log)", 
-                elapsedTime, elapsedTime / 1000.0 * 1000.0);
+    LOG_INFO("Burst of 100 verbose logs completed in %lu ms (average %.2f us per log)", 
+                elapsedTime, elapsedTime / 100.0 * 1000.0);
 
     delay(10000);
 
-    // Try a burst of 1000 debug logs and time it
+    // Try a burst of 100 debug logs and time it
     startTime = millis();
-    LOG_INFO("Starting burst of 1000 debug logs...");
-    for (int i = 0; i < 1000; ++i) {
+    LOG_INFO("Starting burst of 100 debug logs...");
+    for (int i = 0; i < 100; ++i) {
         LOG_DEBUG("Burst debug log %d", i);
     }
     elapsedTime = millis() - startTime;
-    LOG_INFO("Burst of 1000 debug logs completed in %lu ms (average %.2f us per log)", 
-                elapsedTime, elapsedTime / 1000.0 * 1000.0);
+    LOG_INFO("Burst of 100 debug logs completed in %lu ms (average %.2f us per log)", 
+                elapsedTime, elapsedTime / 100.0 * 1000.0);
 
     delay(10000);
 
-    // Try a burst of 1000 fatal logs and time it
+    // Try a burst of 100 fatal logs and time it
     startTime = millis();
-    LOG_INFO("Starting burst of 1000 fatal logs...");
-    for (int i = 0; i < 1000; ++i) {
+    LOG_INFO("Starting burst of 100 fatal logs...");
+    for (int i = 0; i < 100; ++i) {
         LOG_FATAL("Burst fatal log %d", i);
     }
     elapsedTime = millis() - startTime;
-    LOG_INFO("Burst of 1000 fatal logs completed in %lu ms (average %.2f us per log)", 
-                elapsedTime, elapsedTime / 1000.0 * 1000.0);
+    LOG_INFO("Burst of 100 fatal logs completed in %lu ms (average %.2f us per log)", 
+                elapsedTime, elapsedTime / 100.0 * 1000.0);
 
     delay(10000);
 
@@ -121,6 +121,7 @@ void loop()
         LOG_INFO("Error logs: %lu", AdvancedLogger::getErrorCount());
         LOG_INFO("Fatal logs: %lu", AdvancedLogger::getFatalCount());
         LOG_INFO("Total logs: %lu", AdvancedLogger::getTotalLogCount());
+        LOG_INFO("Dropped logs: %lu", AdvancedLogger::getDroppedCount());
         LOG_INFO("====================");
     }
     

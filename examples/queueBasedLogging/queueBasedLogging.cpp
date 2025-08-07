@@ -1,17 +1,41 @@
+/*
+ * File: queueBasedLoggingExample.cpp
+ * ---------------------
+ * This file demonstrates the queue-based logging functionality of the AdvancedLogger library.
+ *
+ * Author: Jibril Sharafi, @jibrilsharafi
+ * Created: 07/08/2025
+ * GitHub repository: https://github.com/jibrilsharafi/AdvancedLogger
+ *
+ * This library is licensed under the MIT License. See the LICENSE file for more information.
+ *
+ * This example covers the log queue features:
+ * - Initializing the logger with queue-based logging
+ * - Rapid logging without blocking the main thread
+ * - Checking queue status (available spaces, messages waiting, dropped messages)
+ * - Demonstrating the efficiency of queue-based logging for high-frequency log generation
+ */
+
 #include <Arduino.h>
-#include <WiFi.h>
+#include <LittleFS.h>
+
 #include "AdvancedLogger.h"
 
 // Optional: Configure queue parameters before including the library
-// #define ADVANCED_LOGGER_QUEUE_SIZE 64
-// #define ADVANCED_LOGGER_TASK_STACK_SIZE 8192
-// #define ADVANCED_LOGGER_TASK_PRIORITY 2
-// #define ADVANCED_LOGGER_TASK_CORE tskNO_AFFINITY
-// #define ADVANCED_LOGGER_MAX_MESSAGE_LENGTH 512
+// #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE 12000 // Amount of heap memory allocated for the log queue. The queue size is calculated based on this value.
+// #define ADVANCED_LOGGER_TASK_STACK_SIZE 4096 // Stack size for the log processing task.
+// #define ADVANCED_LOGGER_TASK_PRIORITY 2 // Priority for the log processing task.
+// #define ADVANCED_LOGGER_TASK_CORE 1 // Core ID for the log processing task.
+// #define ADVANCED_LOGGER_MAX_MESSAGE_LENGTH 512 // Maximum length of log messages.
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
+        
+    if (!LittleFS.begin(true)) // Setting to true will format the LittleFS if mounting fails
+    {
+        Serial.println("An Error has occurred while mounting LittleFS");
+    }
     
     // Initialize the advanced logger with queue-based logging
     AdvancedLogger::begin("/logs/app.log");
@@ -40,7 +64,7 @@ void setup() {
                     AdvancedLogger::getDroppedCount());
         }
 
-        delay(i * 10);
+        delay(i * 5); // Simulate variable delay to mimic real-world logging scenarios
     }
     unsigned long endTime = millis();
     
