@@ -91,6 +91,19 @@ build_flags =
     -DADVANCED_LOGGER_MAX_MESSAGE_LENGTH=512
 ```
 
+### File Flushing
+Configure when log files are flushed to ensure data persistence:
+
+```cpp
+#define ADVANCED_LOGGER_FLUSH_INTERVAL_MS 5000        // Flush every 5 seconds (default)
+#define ADVANCED_LOGGER_FLUSH_ON_ERROR 1              // Enable immediate flush on errors (default)
+#define ADVANCED_LOGGER_FLUSH_LOG_LEVEL LogLevel::ERROR // Log level that triggers immediate flush (default)
+
+#include "AdvancedLogger.h"
+```
+
+The library automatically flushes files periodically and on critical log levels to prevent data loss during power cycles or crashes.
+
 ### Callbacks
 Register a function to handle log entries:
 
