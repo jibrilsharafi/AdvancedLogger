@@ -38,6 +38,9 @@ namespace AdvancedLogger
     static TaskHandle_t _logTaskHandle = nullptr;
     static bool _queueInitialized = false;
 
+    // File flushing control
+    static unsigned long _lastFlushTime = 0;
+
     // Forward declarations of private functions
     static void _log(const char *message, const char *file, const char *function, int line, LogLevel logLevel);
     static void _internalLog(const char* level, const char* format, ...);
@@ -141,6 +144,9 @@ namespace AdvancedLogger
         }
         
         _logLines = getLogLines();
+        
+        // Initialize flush timestamp
+        _lastFlushTime = millis();
         
         _initLogQueue();
         
@@ -331,7 +337,16 @@ namespace AdvancedLogger
 #endif
 
 #ifndef ADVANCED_LOGGER_DISABLE_FILE_LOGGING
-        if (entry.level >= _saveLevel) _save(messageFormatted);
+        if (entry.level >= _saveLevel) {
+            // Determine if immediate flush is needed based on log level
+            bool forceFlush = false;
+#if ADVANCED_LOGGER_FLUSH_ON_ERROR
+            if (entry.level >= LogLevel::ERROR) {
+                forceFlush = true;
+            }
+#endif
+            _save(messageFormatted, forceFlush);
+        }
 #endif
     }
 
@@ -657,7 +672,21 @@ namespace AdvancedLogger
         if (!_checkAndOpenLogFile(FileMode::APPEND)) return;
 
         _logFile.println(messageFormatted);
-        if (flush) _logFile.flush();
+        
+        // Smart flushing logic
+        unsigned long currentTime = millis();
+        bool shouldFlush = flush;
+        
+        // Check if periodic flush interval has elapsed
+        if (!shouldFlush && (currentTime - _lastFlushTime >= ADVANCED_LOGGER_FLUSH_INTERVAL_MS)) {
+            shouldFlush = true;
+        }
+        
+        if (shouldFlush) {
+            _logFile.flush();
+            _lastFlushTime = currentTime;
+        }
+        
         _logLines++;
 
         if (_logLines >= _maxLogLines) {
@@ -830,6 +859,7 @@ namespace AdvancedLogger
     void _closeLogFile() 
     {
         if (_logFile) {
+            _logFile.flush(); // Ensure all data is written before closing
             _logFile.close();
             _currentFileMode = FileMode::APPEND; // Reset to default
         }
