@@ -34,8 +34,7 @@
  * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task.
  * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages.
  * - ADVANCED_LOGGER_FLUSH_INTERVAL_MS: Interval in milliseconds for periodic file flushing (default: 5000ms).
- * - ADVANCED_LOGGER_FLUSH_ON_ERROR: Enable immediate flush on specified log level and above (default: 1 = enabled).
- * - ADVANCED_LOGGER_FLUSH_LOG_LEVEL: Log level that triggers immediate flush when FLUSH_ON_ERROR is enabled (default: ERROR).
+ * - ADVANCED_LOGGER_FLUSH_LOG_LEVEL: Log level that triggers immediate flush (default: ERROR).
  *
  * Usage:
  * In platformio.ini: build_flags = -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240
@@ -68,10 +67,6 @@
 
 #ifndef ADVANCED_LOGGER_FLUSH_INTERVAL_MS
     #define ADVANCED_LOGGER_FLUSH_INTERVAL_MS 5000  // Flush every 5 seconds
-#endif
-
-#ifndef ADVANCED_LOGGER_FLUSH_ON_ERROR
-    #define ADVANCED_LOGGER_FLUSH_ON_ERROR 1  // 1 = enabled, 0 = disabled
 #endif
 
 #ifndef ADVANCED_LOGGER_FLUSH_LOG_LEVEL

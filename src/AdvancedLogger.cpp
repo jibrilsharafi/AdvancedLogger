@@ -339,12 +339,7 @@ namespace AdvancedLogger
 #ifndef ADVANCED_LOGGER_DISABLE_FILE_LOGGING
         if (entry.level >= _saveLevel) {
             // Determine if immediate flush is needed based on log level
-            bool forceFlush = false;
-#if ADVANCED_LOGGER_FLUSH_ON_ERROR
-            if (entry.level >= ADVANCED_LOGGER_FLUSH_LOG_LEVEL) {
-                forceFlush = true;
-            }
-#endif
+            bool forceFlush = (entry.level >= ADVANCED_LOGGER_FLUSH_LOG_LEVEL);
             _save(messageFormatted, forceFlush);
         }
 #endif
