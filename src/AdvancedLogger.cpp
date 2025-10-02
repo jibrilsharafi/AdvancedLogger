@@ -610,7 +610,11 @@ namespace AdvancedLogger
     
     void clearLogKeepLatestXPercent(unsigned char percent) 
     {
-        if (!_checkAndOpenLogFile(FileMode::READ)) return;
+        if (!_checkAndOpenLogFile(FileMode::READ)) {
+            // Failed to open for reading, try to restore append mode
+            _checkAndOpenLogFile(FileMode::APPEND);
+            return;
+        }
 
         size_t totalLines = 0;
         char lineBuffer[MAX_MESSAGE_LENGTH];
@@ -620,7 +624,11 @@ namespace AdvancedLogger
             }
         }
         
-        if (!_reopenLogFile(FileMode::READ)) return;
+        if (!_reopenLogFile(FileMode::READ)) {
+            // Failed to reopen for reading, try to restore append mode
+            _checkAndOpenLogFile(FileMode::APPEND);
+            return;
+        }
 
         percent = percent > 100 ? 100 : percent;
 
@@ -634,6 +642,7 @@ namespace AdvancedLogger
         if (!tempFile) {
             _internalLog("ERROR", "Failed to create temp file");
             _closeLogFile();
+            _checkAndOpenLogFile(FileMode::APPEND);  // Reopen for subsequent logging
             return;
         }
 
