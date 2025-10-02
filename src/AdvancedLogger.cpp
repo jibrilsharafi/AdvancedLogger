@@ -601,20 +601,12 @@ namespace AdvancedLogger
 
         _closeLogFile();
         _logLines = 0;
-        
-        // Reopen the log file in append mode for subsequent logging
-        _checkAndOpenLogFile(FileMode::APPEND);
-        
         _internalLog("INFO", "Log cleared");
     }
     
     void clearLogKeepLatestXPercent(unsigned char percent) 
     {
-        if (!_checkAndOpenLogFile(FileMode::READ)) {
-            // Failed to open for reading, try to restore append mode
-            _checkAndOpenLogFile(FileMode::APPEND);
-            return;
-        }
+        if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
         size_t totalLines = 0;
         char lineBuffer[MAX_MESSAGE_LENGTH];
@@ -624,11 +616,7 @@ namespace AdvancedLogger
             }
         }
         
-        if (!_reopenLogFile(FileMode::READ)) {
-            // Failed to reopen for reading, try to restore append mode
-            _checkAndOpenLogFile(FileMode::APPEND);
-            return;
-        }
+        if (!_reopenLogFile(FileMode::READ)) return;
 
         percent = percent > 100 ? 100 : percent;
 
@@ -642,7 +630,6 @@ namespace AdvancedLogger
         if (!tempFile) {
             _internalLog("ERROR", "Failed to create temp file");
             _closeLogFile();
-            _checkAndOpenLogFile(FileMode::APPEND);  // Reopen for subsequent logging
             return;
         }
 
@@ -667,10 +654,6 @@ namespace AdvancedLogger
         LittleFS.rename(tempFilePath, _logFilePath);
 
         _logLines = linesToKeep;
-        
-        // Reopen the log file in append mode for subsequent logging
-        _checkAndOpenLogFile(FileMode::APPEND);
-        
         _internalLog("INFO", "Log cleared keeping latest entries");
     }
 
