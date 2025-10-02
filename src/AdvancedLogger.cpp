@@ -601,6 +601,10 @@ namespace AdvancedLogger
 
         _closeLogFile();
         _logLines = 0;
+        
+        // Reopen the log file in append mode for subsequent logging
+        _checkAndOpenLogFile(FileMode::APPEND);
+        
         _internalLog("INFO", "Log cleared");
     }
     
@@ -654,6 +658,10 @@ namespace AdvancedLogger
         LittleFS.rename(tempFilePath, _logFilePath);
 
         _logLines = linesToKeep;
+        
+        // Reopen the log file in append mode for subsequent logging
+        _checkAndOpenLogFile(FileMode::APPEND);
+        
         _internalLog("INFO", "Log cleared keeping latest entries");
     }
 
