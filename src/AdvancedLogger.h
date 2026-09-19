@@ -52,7 +52,8 @@
 #endif
 
 #ifndef ADVANCED_LOGGER_TASK_STACK_SIZE
-    #define ADVANCED_LOGGER_TASK_STACK_SIZE (4 * 1024)
+    // Measured peak use is 5.6 KB (LittleFS writes during a log rotation): 4 KB overflowed
+    #define ADVANCED_LOGGER_TASK_STACK_SIZE (8 * 1024)
 #endif
 
 #ifndef ADVANCED_LOGGER_TASK_PRIORITY
