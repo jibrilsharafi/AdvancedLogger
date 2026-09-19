@@ -712,7 +712,7 @@ namespace AdvancedLogger
         if (!_checkAndOpenLogFile(FileMode::READ)) return;
 
         size_t totalLines = 0;
-        char lineBuffer[MAX_MESSAGE_LENGTH];
+        char lineBuffer[MAX_LOG_LENGTH + 2]; // A whole saved line plus its line ending, or long lines get split in two
         while (_logFile.available() && totalLines < MAX_WHILE_LOOP_COUNT) {
             if (_logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1) > 0) {
                 totalLines++;
@@ -736,19 +736,27 @@ namespace AdvancedLogger
             return;
         }
 
-        for (size_t i = 0; i < linesToSkip && _logFile.available(); i++) {
-            _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
+        // Same rule as the counting pass above: only a read that returned something is a line
+        size_t skippedLines = 0;
+        int loopCount = 0;
+        while (skippedLines < linesToSkip && _logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT) {
+            if (_logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1) > 0) skippedLines++;
+            loopCount++;
         }
 
-        int loopCount = 0;
+        bool copied = true;
+        loopCount = 0;
         while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT) {
             int bytesRead = _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
             if (bytesRead > 0) {
                 // println() adds the line ending back: without this every kept line gains one
                 // more '\r' at each rotation
-                if (lineBuffer[bytesRead - 1] == '\r') bytesRead--;
+                while (bytesRead > 0 && lineBuffer[bytesRead - 1] == '\r') bytesRead--;
                 lineBuffer[bytesRead] = '\0';
-                tempFile.println(lineBuffer);
+                if (tempFile.println(lineBuffer) == 0) { // Filesystem full: keep the log as it is
+                    copied = false;
+                    break;
+                }
             }
             loopCount++;
         }
@@ -756,10 +764,24 @@ namespace AdvancedLogger
         _closeLogFile();
         tempFile.close();
 
-        LittleFS.remove(_logFilePath);
-        LittleFS.rename(tempFilePath, _logFilePath);
+        // rename() replaces the destination in one step on LittleFS, so a power loss never leaves
+        // the device without a log file. Removing first is only the fallback. Both fail while
+        // someone else holds the log open (a download in progress): the log is then left alone.
+        bool replaced = copied && LittleFS.rename(tempFilePath, _logFilePath);
+        if (copied && !replaced) {
+            LittleFS.remove(_logFilePath);
+            replaced = LittleFS.rename(tempFilePath, _logFilePath);
+        }
 
+        // On failure the count still restarts from the kept share: the next attempt comes after
+        // another batch of lines, not at every single line
         _logLines = linesToKeep;
+
+        if (!replaced) {
+            LittleFS.remove(tempFilePath);
+            _internalLog("ERROR", "Failed to replace the log file, the log was left as it is");
+            return;
+        }
         _internalLog("INFO", "Log cleared keeping latest entries");
     }
 
