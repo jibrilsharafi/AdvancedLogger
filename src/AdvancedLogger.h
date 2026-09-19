@@ -29,7 +29,7 @@
  * Queue configuration defines that can be overridden by the user:
  *
  * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Internal RAM allocated for the log queue when it does not live in PSRAM. The queue size is calculated based on this value.
- * - ADVANCED_LOGGER_PSRAM_QUEUE_SIZE: PSRAM allocated for the log queue when PSRAM is available (default: 64 KB). Internal RAM then only holds the small queue control structure.
+ * - ADVANCED_LOGGER_PSRAM_QUEUE_SIZE: Opt-in, not defined by default. When defined and PSRAM is found, the log queue lives in PSRAM with this size in bytes and internal RAM only holds the small queue control structure. Falls back to ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE in internal RAM when PSRAM is missing or the allocation fails.
  * - ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS: Longest time a caller waits for a slot when the queue is full (default: 100ms, 0 = never block).
  * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task.
  * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task.
@@ -37,7 +37,6 @@
  * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages.
  * - ADVANCED_LOGGER_FLUSH_INTERVAL_MS: Interval in milliseconds for periodic file flushing (default: 5000ms).
  * - ADVANCED_LOGGER_FLUSH_LOG_LEVEL: Log level that triggers immediate flush (default: ERROR).
- * - ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE: Keep the log queue in internal RAM even when PSRAM is available.
  *
  * Usage:
  * In platformio.ini: build_flags = -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240
@@ -49,18 +48,16 @@
  *
  * Note: If the queue is full, the caller waits up to ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS for a
  * slot (set it to 0 to never block), then the log message is dropped and counted (see
- * getDroppedCount()); the log task writes a WARNING with the number of dropped entries. With
- * PSRAM the queue storage lives there, so ADVANCED_LOGGER_PSRAM_QUEUE_SIZE can be raised to
- * hundreds of KB to absorb bursts.
+ * getDroppedCount()); the log task writes a WARNING with the number of dropped entries. On a
+ * board with PSRAM, define ADVANCED_LOGGER_PSRAM_QUEUE_SIZE (hundreds of KB are fine there) to
+ * absorb bursts without spending internal RAM.
  */
 
 #ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
     #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE (12 * 1024) // Computes to 20 entries of 600 bytes each
 #endif
 
-#ifndef ADVANCED_LOGGER_PSRAM_QUEUE_SIZE
-    #define ADVANCED_LOGGER_PSRAM_QUEUE_SIZE (64 * 1024) // Computes to 109 entries of 600 bytes each
-#endif
+// ADVANCED_LOGGER_PSRAM_QUEUE_SIZE has no default on purpose: defining it is what moves the queue to PSRAM
 
 #ifndef ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS
     #define ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS 100 // Longest a caller is held when the queue is full, before its entry is dropped

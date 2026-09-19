@@ -66,8 +66,10 @@ namespace AdvancedLogger
     static volatile bool _queueInitialized = false;
     static volatile bool _logTaskShouldStop = false;
     static SemaphoreHandle_t _logTaskStopped = nullptr; // Given by the log task right before it deletes itself
-    // Queue storage in PSRAM when there is one (the control structure stays in internal RAM)
+    // Queue storage in PSRAM when asked for (the control structure stays in internal RAM)
+#ifdef ADVANCED_LOGGER_PSRAM_QUEUE_SIZE
     static StaticQueue_t _logQueueStruct;
+#endif
     static uint8_t *_logQueueStorage = nullptr;
 
     // File flushing control
@@ -278,10 +280,11 @@ namespace AdvancedLogger
     }
 
     // The queue storage is the largest allocation of the library, and a plain FreeRTOS queue
-    // always comes from internal RAM, the scarce heap on ESP32. With PSRAM, only the small
-    // control structure stays internal and the entries live in PSRAM. Entries are copied in and
-    // out by xQueueSend/xQueueReceive, so nothing downstream (file writes included) ever reads
-    // PSRAM directly. Define ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE to keep everything internal.
+    // always comes from internal RAM, the scarce heap on ESP32. Opt-in: when
+    // ADVANCED_LOGGER_PSRAM_QUEUE_SIZE is defined and PSRAM is found, only the small control
+    // structure stays internal and the entries live in PSRAM. Entries are copied in and out by
+    // xQueueSend/xQueueReceive, so nothing downstream (file writes included) ever reads PSRAM
+    // directly. Without the define the queue is in internal RAM, as it always was.
     static size_t _queueEntriesFor(size_t bytes)
     {
         size_t entries = bytes / sizeof(LogEntry);
@@ -290,7 +293,7 @@ namespace AdvancedLogger
 
     static QueueHandle_t _createLogQueue()
     {
-#ifndef ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE
+#ifdef ADVANCED_LOGGER_PSRAM_QUEUE_SIZE
         if (psramFound()) {
             size_t queueSize = _queueEntriesFor(ADVANCED_LOGGER_PSRAM_QUEUE_SIZE);
             _logQueueStorage = (uint8_t*)heap_caps_malloc(queueSize * sizeof(LogEntry), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);

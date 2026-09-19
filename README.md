@@ -77,15 +77,15 @@ Customize the logging queue with global build flags. They are read when the libr
 In `platformio.ini`:
 ```ini
 build_flags = 
-    -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=20480   ; Internal RAM for the queue when there is no PSRAM (default 12 KB = 20 entries)
-    -DADVANCED_LOGGER_PSRAM_QUEUE_SIZE=262144     ; PSRAM for the queue when PSRAM is available (default 64 KB = 109 entries)
+    -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=20480   ; Internal RAM for the queue (default 12 KB = 20 entries)
+    -DADVANCED_LOGGER_PSRAM_QUEUE_SIZE=262144     ; Opt-in: put the queue in PSRAM with this size (not defined by default)
     -DADVANCED_LOGGER_QUEUE_FULL_WAIT_MS=100      ; Longest a caller waits for a slot when the queue is full (default 100, 0 = never block)
     -DADVANCED_LOGGER_TASK_STACK_SIZE=8192        ; Log task stack (default 8 KB, a log rotation on LittleFS peaks at about 5.6 KB)
     -DADVANCED_LOGGER_TASK_PRIORITY=2             ; Log task priority
     -DADVANCED_LOGGER_MAX_MESSAGE_LENGTH=512      ; Max message size
 ```
 
-With PSRAM the queue storage is allocated there automatically and internal RAM only holds the small queue control structure. Define `ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE` to keep the queue in internal RAM.
+By default the queue lives in internal RAM. On a board with PSRAM, define `ADVANCED_LOGGER_PSRAM_QUEUE_SIZE` to move the queue storage there: internal RAM then only holds the small queue control structure, and the queue can be hundreds of KB. If PSRAM is not found or the allocation fails, the queue falls back to internal RAM with `ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE`.
 
 When the queue is full, the caller waits up to `ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS` for a slot, then the entry is dropped and counted (`getDroppedCount()`), and the log task writes a `WARNING` with the number of dropped entries. Sinks (console, file, callback) only ever run on the log task. A log rotation keeps the log task busy for a few seconds: size the queue for what your application logs in that time.
 

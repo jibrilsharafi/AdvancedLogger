@@ -23,8 +23,8 @@
 
 // Optional: Configure queue parameters with global build flags (platformio.ini build_flags, or
 // build_opt.h in the Arduino IDE). A #define here is not seen when the library itself is compiled.
-// -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=12288 // Internal RAM allocated for the log queue when there is no PSRAM. The queue size is calculated based on this value.
-// -DADVANCED_LOGGER_PSRAM_QUEUE_SIZE=65536 // PSRAM allocated for the log queue when PSRAM is available.
+// -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=12288 // Internal RAM allocated for the log queue. The queue size is calculated based on this value.
+// -DADVANCED_LOGGER_PSRAM_QUEUE_SIZE=65536 // Opt-in: put the log queue in PSRAM with this size (boards with PSRAM only, not defined by default).
 // -DADVANCED_LOGGER_QUEUE_FULL_WAIT_MS=100 // Longest a caller waits for a slot when the queue is full (0 = never block).
 // -DADVANCED_LOGGER_TASK_STACK_SIZE=8192 // Stack size for the log processing task (4096 overflows during a log rotation).
 // -DADVANCED_LOGGER_TASK_PRIORITY=2 // Priority for the log processing task.
