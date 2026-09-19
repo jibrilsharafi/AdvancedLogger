@@ -29,6 +29,8 @@ clearLog        KEYWORD2
 clearLogKeepLatestXPercent KEYWORD2
 dump            KEYWORD2
 setCallback     KEYWORD2
+setCallbackLevel KEYWORD2
+getCallbackLevel KEYWORD2
 removeCallback  KEYWORD2
 logLevelToString KEYWORD2
 logLevelToStringLower KEYWORD2

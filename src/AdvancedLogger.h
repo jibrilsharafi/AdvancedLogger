@@ -28,29 +28,47 @@
 /*
  * Queue configuration defines that can be overridden by the user:
  *
- * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Amount of heap memory allocated for the log queue. The queue size is calculated based on this value.
+ * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Internal RAM allocated for the log queue when it does not live in PSRAM. The queue size is calculated based on this value.
+ * - ADVANCED_LOGGER_PSRAM_QUEUE_SIZE: PSRAM allocated for the log queue when PSRAM is available (default: 64 KB). Internal RAM then only holds the small queue control structure.
+ * - ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS: Longest time a caller waits for a slot when the queue is full (default: 100ms, 0 = never block).
  * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task.
  * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task.
  * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task.
  * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages.
  * - ADVANCED_LOGGER_FLUSH_INTERVAL_MS: Interval in milliseconds for periodic file flushing (default: 5000ms).
  * - ADVANCED_LOGGER_FLUSH_LOG_LEVEL: Log level that triggers immediate flush (default: ERROR).
+ * - ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE: Keep the log queue in internal RAM even when PSRAM is available.
  *
  * Usage:
  * In platformio.ini: build_flags = -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240
  * In Arduino IDE: Add #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE 10240 before including this header
  * In CMake: add_definitions(-DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240)
+ * These are read when the library itself is compiled, so they must be global build flags: a
+ * #define in the sketch only works for the values used by this header (in the Arduino IDE, put
+ * the -D flags in a build_opt.h file next to the sketch).
  *
- * Note: The logging system uses a non-blocking queue. If the queue is full,
- * the next log message will be processed synchronously thus blocking for a short period.
+ * Note: If the queue is full, the caller waits up to ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS for a
+ * slot (set it to 0 to never block), then the log message is dropped and counted (see
+ * getDroppedCount()); the log task writes a WARNING with the number of dropped entries. With
+ * PSRAM the queue storage lives there, so ADVANCED_LOGGER_PSRAM_QUEUE_SIZE can be raised to
+ * hundreds of KB to absorb bursts.
  */
 
 #ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
     #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE (12 * 1024) // Computes to 20 entries of 600 bytes each
 #endif
 
+#ifndef ADVANCED_LOGGER_PSRAM_QUEUE_SIZE
+    #define ADVANCED_LOGGER_PSRAM_QUEUE_SIZE (64 * 1024) // Computes to 109 entries of 600 bytes each
+#endif
+
+#ifndef ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS
+    #define ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS 100 // Longest a caller is held when the queue is full, before its entry is dropped
+#endif
+
 #ifndef ADVANCED_LOGGER_TASK_STACK_SIZE
-    #define ADVANCED_LOGGER_TASK_STACK_SIZE (4 * 1024)
+    // Measured peak use is 5.6 KB (LittleFS writes during a log rotation): 4 KB overflowed
+    #define ADVANCED_LOGGER_TASK_STACK_SIZE (8 * 1024)
 #endif
 
 #ifndef ADVANCED_LOGGER_TASK_PRIORITY
@@ -152,6 +170,7 @@ constexpr const char* PREFERENCES_NAMESPACE = "adv_log_ns";
 
 constexpr unsigned int DEFAULT_MAX_LOG_LINES = 1000;
 constexpr unsigned int MAX_WHILE_LOOP_COUNT = 10000;
+constexpr unsigned int FILE_READ_CHUNK_SIZE = 256;
 
 constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ";
 constexpr unsigned int TIMESTAMP_BUFFER_SIZE = 25; // 2024-03-21T12:34:56.789Z (ISO 8601 format with milliseconds) is always 24 characters long
@@ -165,6 +184,11 @@ constexpr unsigned int MAX_LOG_MESSAGE_LENGTH = 64;
 constexpr unsigned int MAX_FILE_LENGTH = 32;
 constexpr unsigned int MAX_FUNCTION_LENGTH = 32;
 constexpr unsigned int MAX_INTERNAL_LOG_LENGTH = 128;
+constexpr unsigned long DROPPED_REPORT_INTERVAL_MS = 5000;
+constexpr unsigned long LOG_TASK_STOP_POLL_MS = 200;      // How often the idle log task checks for a stop request
+constexpr unsigned long LOG_TASK_STOP_TIMEOUT_MS = 5000;  // How long end() waits for the log task to save what is queued and stop
+constexpr unsigned long FILE_MUTEX_TIMEOUT_MS = 15000; // Log task only. Longer than a rotation of a full log file, which holds the lock for seconds
+constexpr unsigned long FILE_MUTEX_API_TIMEOUT_MS = 2000; // Public calls (clearLog(), dump()...): they run on the caller's task, often under a watchdog
 
 constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
@@ -240,7 +264,11 @@ namespace AdvancedLogger
     void clearLogKeepLatestXPercent(unsigned char percent = 10);
     
     unsigned long getLogLines();
-    void clearLog();
+    /**
+     * @brief Deletes all logs.
+     * @return false if the log file was busy (a rotation in progress on another task) and was left as it is
+     */
+    bool clearLog();
 
     /**
      * @brief Dumps the entire log content to a Stream.
@@ -249,6 +277,12 @@ namespace AdvancedLogger
     void dump(Stream& stream);
 
     void setCallback(LogCallback callback);
+    /**
+     * @brief Lowest level the callback receives (default VERBOSE = everything). Entries that are
+     * below this level and below both the print and save levels are discarded before queueing.
+     */
+    void setCallbackLevel(LogLevel logLevel);
+    LogLevel getCallbackLevel();
     void removeCallback();
 
     /**
