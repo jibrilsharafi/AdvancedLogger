@@ -238,19 +238,32 @@ namespace AdvancedLogger
     // control structure stays internal and the entries live in PSRAM. Entries are copied in and
     // out by xQueueSend/xQueueReceive, so nothing downstream (file writes included) ever reads
     // PSRAM directly. Define ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE to keep everything internal.
-    static QueueHandle_t _createLogQueue(size_t queueSize)
+    static size_t _queueEntriesFor(size_t bytes)
+    {
+        size_t entries = bytes / sizeof(LogEntry);
+        return entries > 0 ? entries : 1; // Ensure at least one entry can be queued
+    }
+
+    static QueueHandle_t _createLogQueue()
     {
 #ifndef ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE
         if (psramFound()) {
+            size_t queueSize = _queueEntriesFor(ADVANCED_LOGGER_PSRAM_QUEUE_SIZE);
             _logQueueStorage = (uint8_t*)heap_caps_malloc(queueSize * sizeof(LogEntry), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             if (_logQueueStorage) {
                 QueueHandle_t queue = xQueueCreateStatic(queueSize, sizeof(LogEntry), _logQueueStorage, &_logQueueStruct);
-                if (queue) return queue;
+                if (queue) {
+                    _internalLog("DEBUG", "Log queue of %u entries in PSRAM", (unsigned)queueSize);
+                    return queue;
+                }
                 free(_logQueueStorage);
                 _logQueueStorage = nullptr;
             }
         }
 #endif
+        // The internal RAM budget is separate: a size meant for PSRAM must never land here
+        size_t queueSize = _queueEntriesFor(ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE);
+        _internalLog("DEBUG", "Log queue of %u entries in internal RAM", (unsigned)queueSize);
         return xQueueCreate(queueSize, sizeof(LogEntry));
     }
 
@@ -270,9 +283,7 @@ namespace AdvancedLogger
         if (_queueInitialized) return; // Already initialized
 
         // Create the queue for log entries
-        size_t queueSize = ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE / sizeof(LogEntry);
-        queueSize = queueSize > 0 ? queueSize : 1; // Ensure at least one entry can be queued
-        _logQueue = _createLogQueue(queueSize);
+        _logQueue = _createLogQueue();
         if (!_logQueue) {
             _internalLog("ERROR", "Failed to create log queue");
             return;

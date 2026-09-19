@@ -28,7 +28,8 @@
 /*
  * Queue configuration defines that can be overridden by the user:
  *
- * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Amount of heap memory allocated for the log queue. The queue size is calculated based on this value.
+ * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Internal RAM allocated for the log queue when it does not live in PSRAM. The queue size is calculated based on this value.
+ * - ADVANCED_LOGGER_PSRAM_QUEUE_SIZE: PSRAM allocated for the log queue when PSRAM is available (default: 64 KB). Internal RAM then only holds the small queue control structure.
  * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task.
  * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task.
  * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task.
@@ -41,14 +42,21 @@
  * In platformio.ini: build_flags = -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240
  * In Arduino IDE: Add #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE 10240 before including this header
  * In CMake: add_definitions(-DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240)
+ * These are read when the library itself is compiled, so they must be global build flags: a
+ * #define in the sketch only works for the values used by this header (in the Arduino IDE, put
+ * the -D flags in a build_opt.h file next to the sketch).
  *
  * Note: The logging system uses a non-blocking queue. If the queue is full, the log message is
  * dropped and counted (see getDroppedCount()). With PSRAM the queue storage lives there, so
- * ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE can be raised to hundreds of KB to absorb bursts.
+ * ADVANCED_LOGGER_PSRAM_QUEUE_SIZE can be raised to hundreds of KB to absorb bursts.
  */
 
 #ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
     #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE (12 * 1024) // Computes to 20 entries of 600 bytes each
+#endif
+
+#ifndef ADVANCED_LOGGER_PSRAM_QUEUE_SIZE
+    #define ADVANCED_LOGGER_PSRAM_QUEUE_SIZE (64 * 1024) // Computes to 109 entries of 600 bytes each
 #endif
 
 #ifndef ADVANCED_LOGGER_TASK_STACK_SIZE
