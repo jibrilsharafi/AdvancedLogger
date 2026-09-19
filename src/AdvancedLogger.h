@@ -170,6 +170,7 @@ constexpr const char* PREFERENCES_NAMESPACE = "adv_log_ns";
 
 constexpr unsigned int DEFAULT_MAX_LOG_LINES = 1000;
 constexpr unsigned int MAX_WHILE_LOOP_COUNT = 10000;
+constexpr unsigned int FILE_READ_CHUNK_SIZE = 256;
 
 constexpr const char* DEFAULT_TIMESTAMP_FORMAT = "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ";
 constexpr unsigned int TIMESTAMP_BUFFER_SIZE = 25; // 2024-03-21T12:34:56.789Z (ISO 8601 format with milliseconds) is always 24 characters long

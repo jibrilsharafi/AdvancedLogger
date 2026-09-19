@@ -738,17 +738,25 @@ namespace AdvancedLogger
             return 0;
         }
 
-        unsigned int lines = 0;
-        unsigned int loopCount = 0;
-        while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT)
+        // The whole file is counted, in chunks and bounded by its size. It used to stop after
+        // MAX_WHILE_LOOP_COUNT BYTES: every boot restarted the line count at about a hundred
+        // whatever the size of the file, so a device saving fewer than the maximum per boot never
+        // reached the automatic rotation and the log grew without limit.
+        unsigned long lines = 0;
+        uint8_t buffer[FILE_READ_CHUNK_SIZE];
+        size_t remaining = _logFile.size();
+        while (remaining > 0)
         {
-            loopCount++;
-            if (_logFile.read() == '\n')
+            size_t toRead = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+            size_t bytesRead = _logFile.read(buffer, toRead);
+            if (bytesRead == 0 || bytesRead > toRead) break;
+            for (size_t i = 0; i < bytesRead; i++)
             {
-                lines++;
+                if (buffer[i] == '\n') lines++;
             }
+            remaining -= bytesRead;
         }
-        
+
         _closeLogFile();
         _checkAndOpenLogFile(FileMode::APPEND);
         
@@ -905,11 +913,16 @@ namespace AdvancedLogger
         FileLock lock;
         if (!lock || !_checkAndOpenLogFile(FileMode::READ)) return;
 
-        int loopCount = 0;
-        while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT)
+        // Whole file, in chunks and bounded by its size (it used to stop after MAX_WHILE_LOOP_COUNT bytes)
+        uint8_t buffer[FILE_READ_CHUNK_SIZE];
+        size_t remaining = _logFile.size();
+        while (remaining > 0)
         {
-            loopCount++;
-            stream.write(static_cast<uint8_t>(_logFile.read()));
+            size_t toRead = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+            size_t bytesRead = _logFile.read(buffer, toRead);
+            if (bytesRead == 0 || bytesRead > toRead) break;
+            stream.write(buffer, bytesRead);
+            remaining -= bytesRead;
         }
         stream.flush();
 
