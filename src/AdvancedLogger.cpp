@@ -58,7 +58,9 @@ namespace AdvancedLogger
     // Queue-based logging system
     static QueueHandle_t _logQueue = nullptr;
     static TaskHandle_t _logTaskHandle = nullptr;
-    static bool _queueInitialized = false;
+    static volatile bool _queueInitialized = false;
+    static volatile bool _logTaskShouldStop = false;
+    static SemaphoreHandle_t _logTaskStopped = nullptr; // Given by the log task right before it deletes itself
     // Queue storage in PSRAM when there is one (the control structure stays in internal RAM)
     static StaticQueue_t _logQueueStruct;
     static uint8_t *_logQueueStorage = nullptr;
@@ -193,14 +195,21 @@ namespace AdvancedLogger
      */
     void end()
     {
+        if (_logTaskHandle && xTaskGetCurrentTaskHandle() == _logTaskHandle) {
+            _internalLog("ERROR", "AdvancedLogger end called from a log callback, ignored");
+            return;
+        }
+
+        // The task goes first: closing the file under a running task only makes it reopen it
+        _destroyLogQueue();
+
+        FileLock lock;
         if (_logFile) {
             _internalLog("INFO", "AdvancedLogger ended");
             _closeLogFile();
         } else {
             _internalLog("WARNING", "AdvancedLogger end called but log file was not open");
         }
-        
-        _destroyLogQueue();
     }
 
     void verbose(const char *format, const char *file, const char *function, int line, ...)
@@ -316,6 +325,14 @@ namespace AdvancedLogger
             return;
         }
 
+        _logTaskShouldStop = false;
+        _logTaskStopped = xSemaphoreCreateBinary();
+        if (!_logTaskStopped) {
+            _internalLog("ERROR", "Failed to create the log task stop semaphore");
+            _deleteLogQueue();
+            return;
+        }
+
         BaseType_t taskResult = xTaskCreatePinnedToCore(
             _logProcessingTask,
             "AdvancedLogTask",
@@ -328,7 +345,10 @@ namespace AdvancedLogger
 
         if (taskResult != pdPASS) {
             _internalLog("ERROR", "Failed to create log processing task");
+            _logTaskHandle = nullptr;
             _deleteLogQueue();
+            vSemaphoreDelete(_logTaskStopped);
+            _logTaskStopped = nullptr;
             return;
         }
 
@@ -340,14 +360,36 @@ namespace AdvancedLogger
     {
         if (!_queueInitialized) return; // Not initialized
 
+        _queueInitialized = false; // First: no new entry gets in from here on
+
         if (_logTaskHandle) {
-            vTaskDelete(_logTaskHandle);
+            // The task is asked to stop and deletes itself once it has saved what was queued. A
+            // task deleted from outside in the middle of a file write or a print never releases
+            // the locks it holds (LittleFS, UART), and the next user of those blocks forever.
+            _logTaskShouldStop = true;
+            bool stopped = _logTaskStopped && xSemaphoreTake(_logTaskStopped, pdMS_TO_TICKS(LOG_TASK_STOP_TIMEOUT_MS)) == pdTRUE;
+            if (!stopped) {
+                _internalLog("WARNING", "Log task did not stop in time, deleting it");
+                vTaskDelete(_logTaskHandle);
+                // It may have held the file lock: a fresh one is made by the next begin()
+                if (_fileMutex) {
+                    vSemaphoreDelete(_fileMutex);
+                    _fileMutex = nullptr;
+                }
+            }
             _logTaskHandle = nullptr;
         }
 
-        _deleteLogQueue();
+        // A caller that passed the _queueInitialized check just before it was cleared may still be
+        // waiting for a slot: let it finish before the queue goes away under it
+        vTaskDelay(pdMS_TO_TICKS(ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS) + 2);
 
-        _queueInitialized = false;
+        _deleteLogQueue();
+        if (_logTaskStopped) {
+            vSemaphoreDelete(_logTaskStopped);
+            _logTaskStopped = nullptr;
+        }
+
         _internalLog("DEBUG", "Log queue and task destroyed");
     }
 
@@ -362,13 +404,23 @@ namespace AdvancedLogger
     {
         LogEntry entry; // Default constructor values
 
-        while (true) {
-            // Wait for a log entry from the queue
-            if (xQueueReceive(_logQueue, &entry, portMAX_DELAY) == pdTRUE) {
+        // The wait is bounded only so that a stop request is seen
+        while (!_logTaskShouldStop) {
+            if (xQueueReceive(_logQueue, &entry, pdMS_TO_TICKS(LOG_TASK_STOP_POLL_MS)) == pdTRUE) {
                 _processLogEntry(entry);
                 _reportDroppedEntries(entry);
             }
         }
+
+        // Stopping: what is already queued still reaches the sinks (the restart reason is
+        // typically in there). Bounded by what was queued at this point.
+        for (UBaseType_t remaining = uxQueueMessagesWaiting(_logQueue); remaining > 0; remaining--) {
+            if (xQueueReceive(_logQueue, &entry, 0) != pdTRUE) break;
+            _processLogEntry(entry);
+        }
+
+        xSemaphoreGive(_logTaskStopped);
+        vTaskDelete(NULL);
     }
 
     /**
