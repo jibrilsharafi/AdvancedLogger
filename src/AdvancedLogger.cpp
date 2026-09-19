@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <esp_heap_caps.h>
+#include <freertos/semphr.h>
 
 // Macros
 #define PROCESS_ARGS(format, line)                      \
@@ -32,6 +33,23 @@ namespace AdvancedLogger
     // File handling
     File _logFile;
     static FileMode _currentFileMode = FileMode::APPEND;
+
+    // The log task appends to _logFile while any other task may call clearLog(), dump(),
+    // getLogLines()... which close and reopen that same handle in another mode. Every user of
+    // _logFile holds this lock. Recursive, as a rotation is started from inside a save.
+    static SemaphoreHandle_t _fileMutex = nullptr;
+
+    class FileLock
+    {
+    public:
+        FileLock() : _taken(_fileMutex && xSemaphoreTakeRecursive(_fileMutex, pdMS_TO_TICKS(FILE_MUTEX_TIMEOUT_MS)) == pdTRUE) {}
+        ~FileLock() { if (_taken) xSemaphoreGiveRecursive(_fileMutex); }
+        FileLock(const FileLock&) = delete;
+        FileLock& operator=(const FileLock&) = delete;
+        explicit operator bool() const { return _taken; }
+    private:
+        bool _taken;
+    };
 
     // Callback function pointer
     static LogCallback _callback = nullptr;
@@ -118,6 +136,12 @@ namespace AdvancedLogger
             _internalLog("DEBUG", "Using default config as preferences were not found");
         }
 
+        if (!_fileMutex) _fileMutex = xSemaphoreCreateRecursiveMutex();
+        if (!_fileMutex) {
+            _internalLog("ERROR", "Failed to create the log file mutex");
+            return;
+        }
+
         File testFile = LittleFS.open("/", "r");
         bool isAlreadyMounted = testFile;
         if (testFile) testFile.close();
@@ -144,7 +168,8 @@ namespace AdvancedLogger
             }
         }
         
-        bool isLogFileOpen = _checkAndOpenLogFile(FileMode::APPEND);
+        FileLock lock; // A second begin() without end() finds the log task already running
+        bool isLogFileOpen = lock && _checkAndOpenLogFile(FileMode::APPEND);
         if (!isLogFileOpen) {
             Serial.printf("Failed to open log file %s\n", _logFilePath);
             _internalLog("ERROR", "Log file opening failed");
@@ -656,7 +681,8 @@ namespace AdvancedLogger
 
     unsigned long getLogLines()
     {
-        if (!_checkAndOpenLogFile(FileMode::READ)) {
+        FileLock lock;
+        if (!lock || !_checkAndOpenLogFile(FileMode::READ)) {
             return 0;
         }
 
@@ -700,7 +726,8 @@ namespace AdvancedLogger
 
     void clearLog()
     {
-        if (!_checkAndOpenLogFile(FileMode::WRITE)) return;
+        FileLock lock;
+        if (!lock || !_checkAndOpenLogFile(FileMode::WRITE)) return;
 
         _closeLogFile();
         _logLines = 0;
@@ -709,7 +736,8 @@ namespace AdvancedLogger
     
     void clearLogKeepLatestXPercent(unsigned char percent) 
     {
-        if (!_checkAndOpenLogFile(FileMode::READ)) return;
+        FileLock lock;
+        if (!lock || !_checkAndOpenLogFile(FileMode::READ)) return;
 
         size_t totalLines = 0;
         char lineBuffer[MAX_LOG_LENGTH + 2]; // A whole saved line plus its line ending, or long lines get split in two
@@ -792,7 +820,8 @@ namespace AdvancedLogger
      */
     void _save(const char *messageFormatted, bool flush)
     {
-        if (!_checkAndOpenLogFile(FileMode::APPEND)) return;
+        FileLock lock;
+        if (!lock || !_checkAndOpenLogFile(FileMode::APPEND)) return;
 
         _logFile.println(messageFormatted);
         
@@ -821,7 +850,8 @@ namespace AdvancedLogger
     {
         _internalLog("DEBUG", "Dumping log to Stream...");
 
-        if (!_checkAndOpenLogFile(FileMode::READ)) return;
+        FileLock lock;
+        if (!lock || !_checkAndOpenLogFile(FileMode::READ)) return;
 
         int loopCount = 0;
         while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT)

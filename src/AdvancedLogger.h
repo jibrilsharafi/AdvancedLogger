@@ -184,6 +184,7 @@ constexpr unsigned int MAX_FILE_LENGTH = 32;
 constexpr unsigned int MAX_FUNCTION_LENGTH = 32;
 constexpr unsigned int MAX_INTERNAL_LOG_LENGTH = 128;
 constexpr unsigned long DROPPED_REPORT_INTERVAL_MS = 5000;
+constexpr unsigned long FILE_MUTEX_TIMEOUT_MS = 15000; // Longer than a rotation of a full log file, which holds the lock for seconds
 
 constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
