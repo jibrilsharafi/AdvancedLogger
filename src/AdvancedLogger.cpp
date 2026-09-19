@@ -490,7 +490,7 @@ namespace AdvancedLogger
         // Eventual early return
         if (!_isWantedByConsole(entry.level) && !_isWantedByFile(entry.level)) return;
 
-        char messageFormatted[MAX_LOG_LENGTH];
+        char messageFormatted[MAX_LOG_LENGTH + 2]; // Room for the console line ending
 
         char timestamp[TIMESTAMP_BUFFER_SIZE];
         getTimestampIsoUtcFromUnixTimeMilliseconds(entry.unixTimeMilliseconds, timestamp, sizeof(timestamp));
@@ -500,7 +500,7 @@ namespace AdvancedLogger
 
         snprintf(
             messageFormatted,
-            sizeof(messageFormatted),
+            MAX_LOG_LENGTH,
             LOG_PRINT_FORMAT,
             timestamp,
             formattedMillis,
@@ -511,7 +511,15 @@ namespace AdvancedLogger
             entry.message);
 
 #ifndef ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING
-        if (_isWantedByConsole(entry.level)) Serial.println(messageFormatted);
+        if (_isWantedByConsole(entry.level)) {
+            // One write for the line and its ending: the serial driver locks per write, so a
+            // print from another task can no longer land between the two
+            size_t length = strlen(messageFormatted);
+            messageFormatted[length] = '\r';
+            messageFormatted[length + 1] = '\n';
+            Serial.write(reinterpret_cast<const uint8_t*>(messageFormatted), length + 2);
+            messageFormatted[length] = '\0';
+        }
 #endif
 
 #ifndef ADVANCED_LOGGER_DISABLE_FILE_LOGGING
