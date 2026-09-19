@@ -674,6 +674,9 @@ namespace AdvancedLogger
         while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT) {
             int bytesRead = _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
             if (bytesRead > 0) {
+                // println() adds the line ending back: without this every kept line gains one
+                // more '\r' at each rotation
+                if (lineBuffer[bytesRead - 1] == '\r') bytesRead--;
                 lineBuffer[bytesRead] = '\0';
                 tempFile.println(lineBuffer);
             }
