@@ -35,14 +35,16 @@
  * - ADVANCED_LOGGER_MAX_MESSAGE_LENGTH: Maximum length of log messages.
  * - ADVANCED_LOGGER_FLUSH_INTERVAL_MS: Interval in milliseconds for periodic file flushing (default: 5000ms).
  * - ADVANCED_LOGGER_FLUSH_LOG_LEVEL: Log level that triggers immediate flush (default: ERROR).
+ * - ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE: Keep the log queue in internal RAM even when PSRAM is available.
  *
  * Usage:
  * In platformio.ini: build_flags = -DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240
  * In Arduino IDE: Add #define ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE 10240 before including this header
  * In CMake: add_definitions(-DADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE=10240)
  *
- * Note: The logging system uses a non-blocking queue. If the queue is full,
- * the next log message will be processed synchronously thus blocking for a short period.
+ * Note: The logging system uses a non-blocking queue. If the queue is full, the log message is
+ * dropped and counted (see getDroppedCount()). With PSRAM the queue storage lives there, so
+ * ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE can be raised to hundreds of KB to absorb bursts.
  */
 
 #ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
