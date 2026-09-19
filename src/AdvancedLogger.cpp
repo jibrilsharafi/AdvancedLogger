@@ -1,5 +1,6 @@
 #include "AdvancedLogger.h"
 
+#include <atomic>
 #include <esp_heap_caps.h>
 
 // Macros
@@ -26,7 +27,7 @@ namespace AdvancedLogger
     static unsigned long _warningCount = 0;
     static unsigned long _errorCount = 0;
     static unsigned long _fatalCount = 0;
-    static unsigned long _droppedCount = 0;
+    static std::atomic<unsigned long> _droppedCount{0}; // Incremented by any task, on either core
 
     // File handling
     File _logFile;
@@ -73,7 +74,8 @@ namespace AdvancedLogger
     
     static void _logProcessingTask(void* parameter);
     static void _processLogEntry(const LogEntry& entry);
-    
+    static void _reportDroppedEntries(LogEntry& scratch);
+
     // Public functions
     // ================
 
@@ -339,8 +341,40 @@ namespace AdvancedLogger
             // Wait for a log entry from the queue
             if (xQueueReceive(_logQueue, &entry, portMAX_DELAY) == pdTRUE) {
                 _processLogEntry(entry);
+                _reportDroppedEntries(entry);
             }
         }
+    }
+
+    /**
+     * @brief Leaves a trace in the log itself when entries were dropped.
+     *
+     * Runs on the log task, so it goes straight to the sinks without taking a queue slot.
+     * Rate limited: during a sustained overflow it must not add to the load.
+     *
+     * @param scratch Entry buffer of the log task, reused so the notice costs no extra stack.
+     */
+    static void _reportDroppedEntries(LogEntry& scratch)
+    {
+        static unsigned long reportedCount = 0;
+        static unsigned long lastReportTime = 0;
+
+        unsigned long droppedCount = _droppedCount;
+        if (droppedCount < reportedCount) reportedCount = 0; // The counters were reset
+        if (droppedCount == reportedCount) return;
+        if (lastReportTime != 0 && (millis() - lastReportTime < DROPPED_REPORT_INTERVAL_MS)) return;
+
+        scratch.unixTimeMilliseconds = _getUnixTimeMilliseconds();
+        scratch.millis = esp_timer_get_time() / 1000ULL;
+        scratch.level = LogLevel::WARNING;
+        scratch.coreId = xPortGetCoreID();
+        snprintf(scratch.file, sizeof(scratch.file), "AdvancedLogger");
+        snprintf(scratch.function, sizeof(scratch.function), "log");
+        snprintf(scratch.message, sizeof(scratch.message), "%lu log entries dropped because the queue was full (%lu since the counters were reset)", droppedCount - reportedCount, droppedCount);
+        reportedCount = droppedCount;
+        lastReportTime = millis();
+
+        _processLogEntry(scratch);
     }
 
     /**
@@ -429,12 +463,16 @@ namespace AdvancedLogger
             message
         );
 
-        // A full queue drops the entry (counted). It used to process one entry inline to make
+        // A full queue makes the caller wait a bounded time for a slot, then drops the entry
+        // (counted, and reported by the log task). It used to process one entry inline to make
         // room, but that ran the file write and the callback on the CALLER's task: concurrently
         // with the log task on the same file (lines glued together in the log) and on a stack
         // sized for the caller, not for LittleFS. Size the queue for the bursts instead - with
         // PSRAM it can be hundreds of entries for free.
-        if (xQueueSend(_logQueue, &entry, 0) != pdTRUE) _droppedCount++;
+        // The log task itself never waits: nobody else empties the queue.
+        bool canWait = (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) && (xTaskGetCurrentTaskHandle() != _logTaskHandle);
+        TickType_t ticksToWait = canWait ? pdMS_TO_TICKS(ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS) : 0;
+        if (xQueueSend(_logQueue, &entry, ticksToWait) != pdTRUE) _droppedCount++;
     }
 
     /**

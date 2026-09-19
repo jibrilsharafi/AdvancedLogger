@@ -30,6 +30,7 @@
  *
  * - ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE: Internal RAM allocated for the log queue when it does not live in PSRAM. The queue size is calculated based on this value.
  * - ADVANCED_LOGGER_PSRAM_QUEUE_SIZE: PSRAM allocated for the log queue when PSRAM is available (default: 64 KB). Internal RAM then only holds the small queue control structure.
+ * - ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS: Longest time a caller waits for a slot when the queue is full (default: 100ms, 0 = never block).
  * - ADVANCED_LOGGER_TASK_STACK_SIZE: Stack size for the log processing task.
  * - ADVANCED_LOGGER_TASK_PRIORITY: Priority for the log processing task.
  * - ADVANCED_LOGGER_TASK_CORE: Core ID for the log processing task.
@@ -46,9 +47,11 @@
  * #define in the sketch only works for the values used by this header (in the Arduino IDE, put
  * the -D flags in a build_opt.h file next to the sketch).
  *
- * Note: The logging system uses a non-blocking queue. If the queue is full, the log message is
- * dropped and counted (see getDroppedCount()). With PSRAM the queue storage lives there, so
- * ADVANCED_LOGGER_PSRAM_QUEUE_SIZE can be raised to hundreds of KB to absorb bursts.
+ * Note: If the queue is full, the caller waits up to ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS for a
+ * slot (set it to 0 to never block), then the log message is dropped and counted (see
+ * getDroppedCount()); the log task writes a WARNING with the number of dropped entries. With
+ * PSRAM the queue storage lives there, so ADVANCED_LOGGER_PSRAM_QUEUE_SIZE can be raised to
+ * hundreds of KB to absorb bursts.
  */
 
 #ifndef ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE
@@ -57,6 +60,10 @@
 
 #ifndef ADVANCED_LOGGER_PSRAM_QUEUE_SIZE
     #define ADVANCED_LOGGER_PSRAM_QUEUE_SIZE (64 * 1024) // Computes to 109 entries of 600 bytes each
+#endif
+
+#ifndef ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS
+    #define ADVANCED_LOGGER_QUEUE_FULL_WAIT_MS 100 // Longest a caller is held when the queue is full, before its entry is dropped
 #endif
 
 #ifndef ADVANCED_LOGGER_TASK_STACK_SIZE
@@ -176,6 +183,7 @@ constexpr unsigned int MAX_LOG_MESSAGE_LENGTH = 64;
 constexpr unsigned int MAX_FILE_LENGTH = 32;
 constexpr unsigned int MAX_FUNCTION_LENGTH = 32;
 constexpr unsigned int MAX_INTERNAL_LOG_LENGTH = 128;
+constexpr unsigned long DROPPED_REPORT_INTERVAL_MS = 5000;
 
 constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
