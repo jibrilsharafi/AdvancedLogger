@@ -37,17 +37,22 @@ namespace AdvancedLogger
     // The log task appends to _logFile while any other task may call clearLog(), dump(),
     // getLogLines()... which close and reopen that same handle in another mode. Every user of
     // _logFile holds this lock. Recursive, as a rotation is started from inside a save.
+    // Never deleted once created: another task may hold it or be waiting on it at any time.
     static SemaphoreHandle_t _fileMutex = nullptr;
 
+    // The log task can afford to wait out a rotation started by another task. A public call runs
+    // on the caller's task (a web handler under a watchdog, typically): it gives up quickly.
     class FileLock
     {
     public:
-        FileLock() : _taken(_fileMutex && xSemaphoreTakeRecursive(_fileMutex, pdMS_TO_TICKS(FILE_MUTEX_TIMEOUT_MS)) == pdTRUE) {}
-        ~FileLock() { if (_taken) xSemaphoreGiveRecursive(_fileMutex); }
+        explicit FileLock(unsigned long timeoutMs = FILE_MUTEX_API_TIMEOUT_MS)
+            : _mutex(_fileMutex), _taken(_mutex && xSemaphoreTakeRecursive(_mutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE) {}
+        ~FileLock() { if (_taken) xSemaphoreGiveRecursive(_mutex); }
         FileLock(const FileLock&) = delete;
         FileLock& operator=(const FileLock&) = delete;
         explicit operator bool() const { return _taken; }
     private:
+        SemaphoreHandle_t _mutex; // The one that was taken, whatever happens to the global since
         bool _taken;
     };
 
@@ -170,7 +175,7 @@ namespace AdvancedLogger
             }
         }
         
-        FileLock lock; // A second begin() without end() finds the log task already running
+        FileLock lock(FILE_MUTEX_TIMEOUT_MS); // A second begin() without end() finds the log task already running
         bool isLogFileOpen = lock && _checkAndOpenLogFile(FileMode::APPEND);
         if (!isLogFileOpen) {
             Serial.printf("Failed to open log file %s\n", _logFilePath);
@@ -204,7 +209,10 @@ namespace AdvancedLogger
         _destroyLogQueue();
 
         FileLock lock;
-        if (_logFile) {
+        if (!lock) {
+            // Another task is in the middle of a file operation: it closes the file itself
+            _internalLog("WARNING", "AdvancedLogger ended while the log file was in use, not closing it");
+        } else if (_logFile) {
             _internalLog("INFO", "AdvancedLogger ended");
             _closeLogFile();
         } else {
@@ -363,20 +371,22 @@ namespace AdvancedLogger
         _queueInitialized = false; // First: no new entry gets in from here on
 
         if (_logTaskHandle) {
-            // The task is asked to stop and deletes itself once it has saved what was queued. A
+            // The task is asked to stop: it saves what was queued, says so and parks itself. A
             // task deleted from outside in the middle of a file write or a print never releases
             // the locks it holds (LittleFS, UART), and the next user of those blocks forever.
             _logTaskShouldStop = true;
             bool stopped = _logTaskStopped && xSemaphoreTake(_logTaskStopped, pdMS_TO_TICKS(LOG_TASK_STOP_TIMEOUT_MS)) == pdTRUE;
             if (!stopped) {
                 _internalLog("WARNING", "Log task did not stop in time, deleting it");
-                vTaskDelete(_logTaskHandle);
-                // It may have held the file lock: a fresh one is made by the next begin()
-                if (_fileMutex) {
-                    vSemaphoreDelete(_fileMutex);
-                    _fileMutex = nullptr;
+                // If it dies holding the file lock nobody can ever take it again: a fresh one takes
+                // its place. The old one is leaked on purpose, another task may be waiting on it.
+                if (_fileMutex && xSemaphoreGetMutexHolder(_fileMutex) == _logTaskHandle) {
+                    SemaphoreHandle_t freshMutex = xSemaphoreCreateRecursiveMutex();
+                    if (freshMutex) _fileMutex = freshMutex;
                 }
             }
+            // The task never deletes itself, so the handle is valid here in both cases
+            vTaskDelete(_logTaskHandle);
             _logTaskHandle = nullptr;
         }
 
@@ -419,8 +429,10 @@ namespace AdvancedLogger
             _processLogEntry(entry);
         }
 
+        // end() deletes the task: with a single owner of the deletion, a stop that completes
+        // right at the timeout cannot end in a delete of an already freed task
         xSemaphoreGive(_logTaskStopped);
-        vTaskDelete(NULL);
+        while (true) vTaskSuspend(NULL); // A task function must never return
     }
 
     /**
@@ -792,14 +804,19 @@ namespace AdvancedLogger
         return _reopenLogFile(mode);
     }
 
-    void clearLog()
+    bool clearLog()
     {
         FileLock lock;
-        if (!lock || !_checkAndOpenLogFile(FileMode::WRITE)) return;
+        if (!lock) {
+            _internalLog("WARNING", "Log file busy, log not cleared");
+            return false;
+        }
+        if (!_checkAndOpenLogFile(FileMode::WRITE)) return false;
 
         _closeLogFile();
         _logLines = 0;
         _internalLog("INFO", "Log cleared");
+        return true;
     }
     
     void clearLogKeepLatestXPercent(unsigned char percent) 
@@ -840,7 +857,7 @@ namespace AdvancedLogger
             loopCount++;
         }
 
-        bool copied = true;
+        size_t expectedBytes = 0;
         loopCount = 0;
         while (_logFile.available() && loopCount < MAX_WHILE_LOOP_COUNT) {
             int bytesRead = _logFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer) - 1);
@@ -849,13 +866,16 @@ namespace AdvancedLogger
                 // more '\r' at each rotation
                 while (bytesRead > 0 && lineBuffer[bytesRead - 1] == '\r') bytesRead--;
                 lineBuffer[bytesRead] = '\0';
-                if (tempFile.println(lineBuffer) == 0) { // Filesystem full: keep the log as it is
-                    copied = false;
-                    break;
-                }
+                tempFile.println(lineBuffer);
+                expectedBytes += bytesRead + 2;
             }
             loopCount++;
         }
+
+        // Writes are buffered, so a full filesystem only shows once flushed, as a short file.
+        // The log is then kept as it is rather than replaced by a truncated copy.
+        tempFile.flush();
+        bool copied = (tempFile.size() == expectedBytes);
 
         _closeLogFile();
         tempFile.close();
@@ -874,7 +894,8 @@ namespace AdvancedLogger
         _logLines = linesToKeep;
 
         if (!replaced) {
-            LittleFS.remove(tempFilePath);
+            // Unless the fallback removed the log and then failed to rename: the copy is all there is
+            if (LittleFS.exists(_logFilePath)) LittleFS.remove(tempFilePath);
             _internalLog("ERROR", "Failed to replace the log file, the log was left as it is");
             return;
         }
@@ -888,7 +909,8 @@ namespace AdvancedLogger
      */
     void _save(const char *messageFormatted, bool flush)
     {
-        FileLock lock;
+        // Once asked to stop, the log task no longer waits out somebody else's rotation
+        FileLock lock(_logTaskShouldStop ? FILE_MUTEX_API_TIMEOUT_MS : FILE_MUTEX_TIMEOUT_MS);
         if (!lock || !_checkAndOpenLogFile(FileMode::APPEND)) return;
 
         _logFile.println(messageFormatted);

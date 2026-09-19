@@ -187,7 +187,8 @@ constexpr unsigned int MAX_INTERNAL_LOG_LENGTH = 128;
 constexpr unsigned long DROPPED_REPORT_INTERVAL_MS = 5000;
 constexpr unsigned long LOG_TASK_STOP_POLL_MS = 200;      // How often the idle log task checks for a stop request
 constexpr unsigned long LOG_TASK_STOP_TIMEOUT_MS = 5000;  // How long end() waits for the log task to save what is queued and stop
-constexpr unsigned long FILE_MUTEX_TIMEOUT_MS = 15000; // Longer than a rotation of a full log file, which holds the lock for seconds
+constexpr unsigned long FILE_MUTEX_TIMEOUT_MS = 15000; // Log task only. Longer than a rotation of a full log file, which holds the lock for seconds
+constexpr unsigned long FILE_MUTEX_API_TIMEOUT_MS = 2000; // Public calls (clearLog(), dump()...): they run on the caller's task, often under a watchdog
 
 constexpr const char* LOG_PRINT_FORMAT = "[%s] [%s ms] [%s] [Core %d] [%s:%s] %s"; // [TIME] [MILLIS ms] [LOG_LEVEL] [Core CORE] [FILE:FUNCTION] MESSAGE
 
@@ -263,7 +264,11 @@ namespace AdvancedLogger
     void clearLogKeepLatestXPercent(unsigned char percent = 10);
     
     unsigned long getLogLines();
-    void clearLog();
+    /**
+     * @brief Deletes all logs.
+     * @return false if the log file was busy (a rotation in progress on another task) and was left as it is
+     */
+    bool clearLog();
 
     /**
      * @brief Dumps the entire log content to a Stream.
