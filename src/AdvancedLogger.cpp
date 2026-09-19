@@ -34,6 +34,7 @@ namespace AdvancedLogger
 
     // Callback function pointer
     static LogCallback _callback = nullptr;
+    static LogLevel _callbackLevel = LogLevel::VERBOSE; // The callback gets entries at or above this level
 
     // Queue-based logging system
     static QueueHandle_t _logQueue = nullptr;
@@ -340,7 +341,7 @@ namespace AdvancedLogger
      */
     static void _processLogEntry(const LogEntry& entry)
     {
-        if (_callback) _callback(entry);
+        if (_callback && entry.level >= _callbackLevel) _callback(entry);
 
         // Eventual early return
         if ((entry.level < _printLevel) && (entry.level < _saveLevel)) return;
@@ -399,8 +400,10 @@ namespace AdvancedLogger
             return;
         }
 
-        // Early return if nothing to do
-        if (!_callback && (logLevel < _printLevel) && (logLevel < _saveLevel)) return;
+        // Early return if nobody wants this entry: it must not take a queue slot from one that
+        // is wanted (a VERBOSE flood otherwise fills the queue and pushes real logs out)
+        bool wantedByCallback = _callback && (logLevel >= _callbackLevel);
+        if (!wantedByCallback && (logLevel < _printLevel) && (logLevel < _saveLevel)) return;
 
         unsigned long long unixTimeMs = _getUnixTimeMilliseconds();
         unsigned long long millis = (esp_timer_get_time() / 1000ULL);
@@ -415,16 +418,11 @@ namespace AdvancedLogger
             message
         );
 
-        // Check if the queue is full and process one entry to make space and avoid dropping logs
-        // This WILL block
-        if (uxQueueSpacesAvailable(_logQueue) == 0) {
-            _internalLog("DEBUG", "Log queue is full, processing one entry to make space");
-            LogEntry processedEntry;
-            if (xQueueReceive(_logQueue, &processedEntry, 0) == pdTRUE) {
-                _processLogEntry(processedEntry);
-            }
-        }
-
+        // A full queue drops the entry (counted). It used to process one entry inline to make
+        // room, but that ran the file write and the callback on the CALLER's task: concurrently
+        // with the log task on the same file (lines glued together in the log) and on a stack
+        // sized for the caller, not for LittleFS. Size the queue for the bursts instead - with
+        // PSRAM it can be hundreds of entries for free.
         if (xQueueSend(_logQueue, &entry, 0) != pdTRUE) _droppedCount++;
     }
 
@@ -516,6 +514,8 @@ namespace AdvancedLogger
     }
     
     void setCallback(LogCallback callback) { _callback = callback; }
+    void setCallbackLevel(LogLevel logLevel) { _callbackLevel = logLevel; }
+    LogLevel getCallbackLevel() { return _callbackLevel; }
     void removeCallback() { _callback = nullptr; }
 
     bool _setConfigFromPreferences()

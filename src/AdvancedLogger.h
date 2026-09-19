@@ -249,6 +249,12 @@ namespace AdvancedLogger
     void dump(Stream& stream);
 
     void setCallback(LogCallback callback);
+    /**
+     * @brief Lowest level the callback receives (default VERBOSE = everything). Entries that are
+     * below this level and below both the print and save levels are discarded before queueing.
+     */
+    void setCallbackLevel(LogLevel logLevel);
+    LogLevel getCallbackLevel();
     void removeCallback();
 
     /**
