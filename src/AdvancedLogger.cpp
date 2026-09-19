@@ -1,5 +1,15 @@
 #include "AdvancedLogger.h"
 
+#include <esp_idf_version.h>
+
+// xQueueCreateWithCaps() arrived with ESP-IDF 5.1. Define ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE to
+// keep the queue in internal RAM even when PSRAM is available.
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0) && !defined(ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE)
+    #include <esp_heap_caps.h>
+    #include <freertos/idf_additions.h>
+    #define ADVANCED_LOGGER_PSRAM_QUEUE 1
+#endif
+
 // Macros
 #define PROCESS_ARGS(format, line)                      \
     char message[MAX_MESSAGE_LENGTH];                   \
@@ -37,6 +47,7 @@ namespace AdvancedLogger
     static QueueHandle_t _logQueue = nullptr;
     static TaskHandle_t _logTaskHandle = nullptr;
     static bool _queueInitialized = false;
+    static bool _logQueueInPsram = false; // A queue created with caps must be deleted with caps
 
     // File flushing control
     static unsigned long _lastFlushTime = 0;
@@ -227,6 +238,37 @@ namespace AdvancedLogger
 #endif
     }
 
+    // The queue storage is the largest allocation of the library, and a plain FreeRTOS queue
+    // always comes from internal RAM, the scarce heap on ESP32. Put it in PSRAM when there is
+    // one. Safe because the queue is only ever touched from tasks, never from an ISR.
+    static QueueHandle_t _createLogQueue(size_t queueSize)
+    {
+#ifdef ADVANCED_LOGGER_PSRAM_QUEUE
+        if (psramFound()) {
+            QueueHandle_t queue = xQueueCreateWithCaps(queueSize, sizeof(LogEntry), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (queue) {
+                _logQueueInPsram = true;
+                return queue;
+            }
+        }
+#endif
+        _logQueueInPsram = false;
+        return xQueueCreate(queueSize, sizeof(LogEntry));
+    }
+
+    static void _deleteLogQueue()
+    {
+        if (!_logQueue) return;
+#ifdef ADVANCED_LOGGER_PSRAM_QUEUE
+        if (_logQueueInPsram) vQueueDeleteWithCaps(_logQueue);
+        else vQueueDelete(_logQueue);
+#else
+        vQueueDelete(_logQueue);
+#endif
+        _logQueue = nullptr;
+        _logQueueInPsram = false;
+    }
+
     static void _initLogQueue()
     {
         if (_queueInitialized) return; // Already initialized
@@ -234,7 +276,7 @@ namespace AdvancedLogger
         // Create the queue for log entries
         size_t queueSize = ADVANCED_LOGGER_ALLOCABLE_HEAP_SIZE / sizeof(LogEntry);
         queueSize = queueSize > 0 ? queueSize : 1; // Ensure at least one entry can be queued
-        _logQueue = xQueueCreate(queueSize, sizeof(LogEntry));
+        _logQueue = _createLogQueue(queueSize);
         if (!_logQueue) {
             _internalLog("ERROR", "Failed to create log queue");
             return;
@@ -252,8 +294,7 @@ namespace AdvancedLogger
 
         if (taskResult != pdPASS) {
             _internalLog("ERROR", "Failed to create log processing task");
-            vQueueDelete(_logQueue);
-            _logQueue = nullptr;
+            _deleteLogQueue();
             return;
         }
 
@@ -270,10 +311,7 @@ namespace AdvancedLogger
             _logTaskHandle = nullptr;
         }
 
-        if (_logQueue) {
-            vQueueDelete(_logQueue);
-            _logQueue = nullptr;
-        }
+        _deleteLogQueue();
 
         _queueInitialized = false;
         _internalLog("DEBUG", "Log queue and task destroyed");
