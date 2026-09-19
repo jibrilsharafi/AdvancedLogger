@@ -384,12 +384,34 @@ namespace AdvancedLogger
      *
      * @param entry The log entry to process.
      */
+    // Who wants an entry of this level. A sink disabled at compile time wants nothing, whatever
+    // level is stored for it: its entries must not take queue slots only to be thrown away.
+    static bool _isWantedByCallback(LogLevel logLevel) { return _callback && (logLevel >= _callbackLevel); }
+
+    static bool _isWantedByConsole(LogLevel logLevel)
+    {
+#ifdef ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING
+        return false;
+#else
+        return logLevel >= _printLevel;
+#endif
+    }
+
+    static bool _isWantedByFile(LogLevel logLevel)
+    {
+#ifdef ADVANCED_LOGGER_DISABLE_FILE_LOGGING
+        return false;
+#else
+        return logLevel >= _saveLevel;
+#endif
+    }
+
     static void _processLogEntry(const LogEntry& entry)
     {
-        if (_callback && entry.level >= _callbackLevel) _callback(entry);
+        if (_isWantedByCallback(entry.level)) _callback(entry);
 
         // Eventual early return
-        if ((entry.level < _printLevel) && (entry.level < _saveLevel)) return;
+        if (!_isWantedByConsole(entry.level) && !_isWantedByFile(entry.level)) return;
 
         char messageFormatted[MAX_LOG_LENGTH];
 
@@ -412,11 +434,11 @@ namespace AdvancedLogger
             entry.message);
 
 #ifndef ADVANCED_LOGGER_DISABLE_CONSOLE_LOGGING
-        if (entry.level >= _printLevel) Serial.println(messageFormatted);
+        if (_isWantedByConsole(entry.level)) Serial.println(messageFormatted);
 #endif
 
 #ifndef ADVANCED_LOGGER_DISABLE_FILE_LOGGING
-        if (entry.level >= _saveLevel) {
+        if (_isWantedByFile(entry.level)) {
             // Determine if immediate flush is needed based on log level
             bool forceFlush = (entry.level >= ADVANCED_LOGGER_FLUSH_LOG_LEVEL);
             _save(messageFormatted, forceFlush);
@@ -447,8 +469,7 @@ namespace AdvancedLogger
 
         // Early return if nobody wants this entry: it must not take a queue slot from one that
         // is wanted (a VERBOSE flood otherwise fills the queue and pushes real logs out)
-        bool wantedByCallback = _callback && (logLevel >= _callbackLevel);
-        if (!wantedByCallback && (logLevel < _printLevel) && (logLevel < _saveLevel)) return;
+        if (!_isWantedByCallback(logLevel) && !_isWantedByConsole(logLevel) && !_isWantedByFile(logLevel)) return;
 
         unsigned long long unixTimeMs = _getUnixTimeMilliseconds();
         unsigned long long millis = (esp_timer_get_time() / 1000ULL);
