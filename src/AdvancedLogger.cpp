@@ -1,14 +1,6 @@
 #include "AdvancedLogger.h"
 
-#include <esp_idf_version.h>
-
-// xQueueCreateWithCaps() arrived with ESP-IDF 5.1. Define ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE to
-// keep the queue in internal RAM even when PSRAM is available.
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 1, 0) && !defined(ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE)
-    #include <esp_heap_caps.h>
-    #include <freertos/idf_additions.h>
-    #define ADVANCED_LOGGER_PSRAM_QUEUE 1
-#endif
+#include <esp_heap_caps.h>
 
 // Macros
 #define PROCESS_ARGS(format, line)                      \
@@ -47,7 +39,9 @@ namespace AdvancedLogger
     static QueueHandle_t _logQueue = nullptr;
     static TaskHandle_t _logTaskHandle = nullptr;
     static bool _queueInitialized = false;
-    static bool _logQueueInPsram = false; // A queue created with caps must be deleted with caps
+    // Queue storage in PSRAM when there is one (the control structure stays in internal RAM)
+    static StaticQueue_t _logQueueStruct;
+    static uint8_t *_logQueueStorage = nullptr;
 
     // File flushing control
     static unsigned long _lastFlushTime = 0;
@@ -239,34 +233,35 @@ namespace AdvancedLogger
     }
 
     // The queue storage is the largest allocation of the library, and a plain FreeRTOS queue
-    // always comes from internal RAM, the scarce heap on ESP32. Put it in PSRAM when there is
-    // one. Safe because the queue is only ever touched from tasks, never from an ISR.
+    // always comes from internal RAM, the scarce heap on ESP32. With PSRAM, only the small
+    // control structure stays internal and the entries live in PSRAM. Entries are copied in and
+    // out by xQueueSend/xQueueReceive, so nothing downstream (file writes included) ever reads
+    // PSRAM directly. Define ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE to keep everything internal.
     static QueueHandle_t _createLogQueue(size_t queueSize)
     {
-#ifdef ADVANCED_LOGGER_PSRAM_QUEUE
+#ifndef ADVANCED_LOGGER_DISABLE_PSRAM_QUEUE
         if (psramFound()) {
-            QueueHandle_t queue = xQueueCreateWithCaps(queueSize, sizeof(LogEntry), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-            if (queue) {
-                _logQueueInPsram = true;
-                return queue;
+            _logQueueStorage = (uint8_t*)heap_caps_malloc(queueSize * sizeof(LogEntry), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (_logQueueStorage) {
+                QueueHandle_t queue = xQueueCreateStatic(queueSize, sizeof(LogEntry), _logQueueStorage, &_logQueueStruct);
+                if (queue) return queue;
+                free(_logQueueStorage);
+                _logQueueStorage = nullptr;
             }
         }
 #endif
-        _logQueueInPsram = false;
         return xQueueCreate(queueSize, sizeof(LogEntry));
     }
 
     static void _deleteLogQueue()
     {
         if (!_logQueue) return;
-#ifdef ADVANCED_LOGGER_PSRAM_QUEUE
-        if (_logQueueInPsram) vQueueDeleteWithCaps(_logQueue);
-        else vQueueDelete(_logQueue);
-#else
-        vQueueDelete(_logQueue);
-#endif
+        vQueueDelete(_logQueue); // A static queue's memory is not freed by FreeRTOS
         _logQueue = nullptr;
-        _logQueueInPsram = false;
+        if (_logQueueStorage) {
+            free(_logQueueStorage);
+            _logQueueStorage = nullptr;
+        }
     }
 
     static void _initLogQueue()
